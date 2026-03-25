@@ -1,0 +1,368 @@
+#!/usr/bin/env bash
+# tg-viewer — Telegram Data Backup, Decrypt & Visualize CLI
+# Main interface for the complete Telegram data extraction workflow
+
+set -euo pipefail
+
+# ── Config ────────────────────────────────────────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BACKUP_SCRIPT="$SCRIPT_DIR/tg-backup.sh"
+EXTRACT_SCRIPT="$SCRIPT_DIR/extract-keys.sh"
+APPSTORE_DECRYPT_SCRIPT="$SCRIPT_DIR/tg_appstore_decrypt.py"
+POSTBOX_PARSER_SCRIPT="$SCRIPT_DIR/postbox_parser.py"
+WEBUI_SCRIPT="$SCRIPT_DIR/webui.py"
+REQUIREMENTS_FILE="$SCRIPT_DIR/requirements.txt"
+
+# ── Colors ────────────────────────────────────────────────────────────────────
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; BLUE='\033[0;34m'; NC='\033[0m'
+
+log()    { echo -e "${CYAN}[INFO]${NC}  $*"; }
+ok()     { echo -e "${GREEN}[OK]${NC}    $*"; }
+warn()   { echo -e "${YELLOW}[WARN]${NC}  $*"; }
+die()    { echo -e "${RED}[ERROR]${NC} $*" >&2; exit 1; }
+title()  { echo -e "\n${BLUE}=== $* ===${NC}"; }
+
+# ── Help ──────────────────────────────────────────────────────────────────────
+show_help() {
+    cat << 'EOF'
+📱 Telegram Data Viewer — Complete Telegram Data Extraction & Visualization
+
+USAGE:
+    ./tg-viewer [COMMAND] [OPTIONS]
+
+COMMANDS:
+    backup [DIR]        Create backup of Telegram data to directory
+    decrypt DIR         Decrypt databases (App Store .tempkeyEncrypted)
+    parse DIR           Parse Postbox binary format → messages/peers/conversations
+    webui DIR           Start web UI to visualize parsed data
+    full [DIR]          Run complete workflow: backup → decrypt → parse → webui
+    clean               Remove all backup, decrypted, and parsed data
+    setup               Install Python dependencies
+    help                Show this help
+
+WORKFLOW EXAMPLES:
+    # Complete workflow (recommended for first-time users)
+    ./tg-viewer full
+
+    # Step by step
+    ./tg-viewer backup ./my-backup
+    ./tg-viewer decrypt ./my-backup/tg_*/
+    ./tg-viewer parse ./my-backup/tg_*/
+    ./tg-viewer webui ./my-backup/tg_*/parsed_data
+
+    # Just start web UI with existing data
+    ./tg-viewer webui ./path/to/parsed_data
+
+OPTIONS:
+    --port PORT         Web UI port (default: 5000)
+    --host HOST         Web UI host (default: 127.0.0.1)
+    --help, -h          Show this help
+
+NOTES:
+    • First time? Run: ./tg-viewer setup && ./tg-viewer full
+    • Quit Telegram before running backup for best results
+    • Web UI will be available at http://127.0.0.1:5000
+    • All generated data is automatically gitignored
+
+EOF
+}
+
+# ── Functions ─────────────────────────────────────────────────────────────────
+check_dependencies() {
+    local missing=()
+    
+    # Check required scripts
+    for script in "$BACKUP_SCRIPT" "$APPSTORE_DECRYPT_SCRIPT" "$POSTBOX_PARSER_SCRIPT" "$WEBUI_SCRIPT"; do
+        [[ -f "$script" ]] || missing+=("$(basename "$script")")
+    done
+    
+    # Check Python
+    if ! command -v python3 &>/dev/null; then
+        missing+=("python3")
+    fi
+    
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        die "Missing dependencies: ${missing[*]}\nRun './tg-viewer setup' to install"
+    fi
+}
+
+setup_dependencies() {
+    title "Setting up dependencies"
+    
+    # Check Python
+    if ! command -v python3 &>/dev/null; then
+        die "Python 3 is required. Please install Python 3 first."
+    fi
+    
+    # Install Python packages
+    if [[ -f "$REQUIREMENTS_FILE" ]]; then
+        log "Installing Python dependencies..."
+        python3 -m pip install -r "$REQUIREMENTS_FILE"
+        ok "Python dependencies installed"
+    else
+        warn "Requirements file not found: $REQUIREMENTS_FILE"
+    fi
+    
+    # Make scripts executable
+    for script in "$BACKUP_SCRIPT" "$EXTRACT_SCRIPT" "$APPSTORE_DECRYPT_SCRIPT" "$POSTBOX_PARSER_SCRIPT" "$WEBUI_SCRIPT"; do
+        if [[ -f "$script" ]]; then
+            chmod +x "$script"
+            log "Made executable: $(basename "$script")"
+        fi
+    done
+    
+    ok "Setup complete!"
+}
+
+run_backup() {
+    local dest_dir="${1:-./tg_$(date +"%Y-%m-%d_%H-%M-%S")}"
+    
+    title "Step 1: Backing up Telegram data"
+    
+    if [[ ! -f "$BACKUP_SCRIPT" ]]; then
+        die "Backup script not found: $BACKUP_SCRIPT"
+    fi
+    
+    log "Running Telegram backup to: $dest_dir"
+    "$BACKUP_SCRIPT" "$dest_dir"
+    
+    echo "$dest_dir"  # Return the backup directory
+}
+
+# Find the inner tg_* backup directory created by tg-backup.sh
+# tg-backup.sh creates $DEST/tg_$TIMESTAMP/ inside the given directory
+find_inner_backup_dir() {
+    local dest_dir="$1"
+    # If dest_dir itself contains account-* dirs, use it directly
+    if compgen -G "$dest_dir/account-*" > /dev/null 2>&1; then
+        echo "$dest_dir"
+        return
+    fi
+    # Otherwise look for the tg_* subdirectory created by tg-backup.sh
+    local inner
+    inner=$(find "$dest_dir" -maxdepth 1 -type d -name "tg_*" | sort | tail -1)
+    if [[ -n "$inner" ]]; then
+        echo "$inner"
+    else
+        echo "$dest_dir"
+    fi
+}
+
+run_decrypt() {
+    local backup_dir="$1"
+
+    title "Step 2: Decrypting databases"
+
+    if [[ ! -d "$backup_dir" ]]; then
+        die "Backup directory not found: $backup_dir"
+    fi
+
+    log "Decrypting databases in: $backup_dir"
+    python3 "$APPSTORE_DECRYPT_SCRIPT" "$backup_dir"
+}
+
+run_parse() {
+    local backup_dir="$1"
+
+    title "Step 3: Parsing Postbox data"
+
+    if [[ ! -d "$backup_dir" ]]; then
+        die "Backup directory not found: $backup_dir"
+    fi
+
+    log "Parsing messages, peers, and conversations in: $backup_dir"
+    python3 "$POSTBOX_PARSER_SCRIPT" "$backup_dir"
+}
+
+run_webui() {
+    local data_dir="$1"
+    local port="${2:-5000}"
+    local host="${3:-127.0.0.1}"
+    
+    title "Step 4: Starting Web UI"
+    
+    if [[ ! -f "$WEBUI_SCRIPT" ]]; then
+        die "Web UI script not found: $WEBUI_SCRIPT"
+    fi
+    
+    if [[ ! -d "$data_dir" ]]; then
+        die "Data directory not found: $data_dir"
+    fi
+    
+    log "Starting web interface..."
+    log "Data directory: $data_dir"
+    log "URL: http://$host:$port"
+    
+    python3 "$WEBUI_SCRIPT" "$data_dir" --host "$host" --port "$port"
+}
+
+run_clean() {
+    title "Cleaning up generated data"
+
+    local dirs_found=()
+
+    # Collect tg_* backup directories at project root (not tg-viewer, tg-backup.sh, etc.)
+    for d in "$SCRIPT_DIR"/tg_*/; do
+        [[ -d "$d" ]] && dirs_found+=("$d")
+    done
+
+    if [[ ${#dirs_found[@]} -eq 0 ]]; then
+        log "Nothing to clean. No tg_* backup directories found."
+        return
+    fi
+
+    log "Found the following backup directories:"
+    local total_size
+    for d in "${dirs_found[@]}"; do
+        local size
+        size=$(du -sh "$d" 2>/dev/null | cut -f1)
+        log "  $d ($size)"
+    done
+    total_size=$(du -shc "${dirs_found[@]}" 2>/dev/null | tail -1 | cut -f1)
+    echo ""
+    warn "This will permanently delete $total_size of data (backups, decrypted, and parsed)."
+    read -rp "Continue? [y/N] " confirm
+    if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+        log "Cancelled."
+        return
+    fi
+
+    for d in "${dirs_found[@]}"; do
+        rm -rf "$d"
+        ok "Removed: $d"
+    done
+
+    ok "Cleanup complete."
+}
+
+run_full_workflow() {
+    local dest_dir="${1:-./tg_$(date +"%Y-%m-%d_%H-%M-%S")}"
+    
+    echo -e "${BLUE}"
+    cat << 'EOF'
+  ████████╗ ██████╗       ██╗   ██╗██╗███████╗██╗    ██╗███████╗██████╔╗ 
+  ╚══██╔══╝██╔════╝       ██║   ██║██║██╔════╝██║    ██║██╔════╝██╔══██╗
+     ██║   ██║  ███╗█████╗ ██║   ██║██║█████╗  ██║ █╗ ██║█████╗  ██████╔╝
+     ██║   ██║   ██║╚════╝ ╚██╗ ██╔╝██║██╔══╝  ██║███╗██║██╔══╝  ██╔══██╗
+     ██║   ╚██████╔╝        ╚████╔╝ ██║███████╗╚███╔███╔╝███████╗██║  ██║
+     ╚═╝    ╚═════╝          ╚═══╝  ╚═╝╚══════╝ ╚══╝╚══╝ ╚══════╝╚═╝  ╚═╝
+EOF
+    echo -e "${NC}"
+    
+    log "Starting complete Telegram data extraction workflow"
+    log "Destination: $dest_dir"
+    echo ""
+    
+    # Check for Telegram running before starting
+    if pgrep -x "Telegram" > /dev/null 2>&1; then
+        warn "Telegram is currently running."
+        warn "The postbox DB may be locked / mid-write."
+        read -rp "  It's safer to quit Telegram first. Continue anyway? [y/N] " confirm
+        if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+            die "Aborted. Please quit Telegram and re-run."
+        fi
+    fi
+    
+    # Step 1: Backup
+    title "Step 1: Backing up Telegram data"
+    log "Running Telegram backup to: $dest_dir"
+    
+    if [[ ! -f "$BACKUP_SCRIPT" ]]; then
+        die "Backup script not found: $BACKUP_SCRIPT"
+    fi
+    
+    # Run backup script (--batch skips interactive prompts)
+    "$BACKUP_SCRIPT" "$dest_dir" --batch
+
+    # Find the actual backup dir (tg-backup.sh creates a tg_* subdir)
+    backup_dir=$(find_inner_backup_dir "$dest_dir")
+    log "Using backup directory: $backup_dir"
+
+    # Step 2: Decrypt (App Store .tempkeyEncrypted → SQLCipher)
+    run_decrypt "$backup_dir"
+
+    # Step 3: Parse (Postbox binary → messages/peers/conversations)
+    run_parse "$backup_dir"
+
+    # Step 4: Web UI
+    data_dir="$backup_dir/parsed_data"
+    if [[ -d "$data_dir" ]]; then
+        echo ""
+        ok "Workflow complete!"
+        ok "Backup: $backup_dir"
+        ok "Data: $data_dir"
+        echo ""
+
+        read -rp "Start web UI now? [Y/n] " start_ui
+        if [[ "$start_ui" != "n" && "$start_ui" != "N" ]]; then
+            run_webui "$data_dir"
+        else
+            log "To start web UI later, run: ./tg-viewer webui '$data_dir'"
+        fi
+    else
+        warn "Parsed data directory not found. Check output above for errors."
+    fi
+}
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+main() {
+    local command="${1:-help}"
+    local port="5000"
+    local host="127.0.0.1"
+    
+    # Parse global options
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --port) port="$2"; shift 2 ;;
+            --host) host="$2"; shift 2 ;;
+            --help|-h) show_help; exit 0 ;;
+            -*) die "Unknown option: $1" ;;
+            *) break ;;
+        esac
+    done
+    
+    command="${1:-help}"
+    
+    case "$command" in
+        setup)
+            setup_dependencies
+            ;;
+        backup)
+            check_dependencies
+            run_backup "${2:-}"
+            ;;
+        decrypt)
+            check_dependencies
+            [[ -n "${2:-}" ]] || die "Usage: $0 decrypt <backup_dir>"
+            run_decrypt "$2"
+            ;;
+        parse)
+            check_dependencies
+            [[ -n "${2:-}" ]] || die "Usage: $0 parse <backup_dir>"
+            run_parse "$2"
+            ;;
+        webui)
+            check_dependencies
+            [[ -n "${2:-}" ]] || die "Usage: $0 webui <data_dir>"
+            run_webui "$2" "$port" "$host"
+            ;;
+        full)
+            check_dependencies
+            run_full_workflow "${2:-}"
+            ;;
+        clean)
+            run_clean
+            ;;
+        help|--help|-h)
+            show_help
+            ;;
+        *)
+            echo "Unknown command: $command"
+            echo "Run './tg-viewer help' for usage information"
+            exit 1
+            ;;
+    esac
+}
+
+# Run main function with all arguments
+main "$@"

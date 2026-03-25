@@ -1,0 +1,48 @@
+# Telegram backup data (contains personal messages)
+tg_*/
+test-data/
+telegram_keys.json
+decrypted_data/
+parsed_data/
+*.tar.gz
+
+# Database files
+*.db
+*.sqlite
+*_export.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+.Python
+venv/
+env/
+.venv/
+
+# IDE/Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+
+# Logs
+*.log
+
+# Claude Code
+.claude/
+
+# Environment
+.env
+.env.*
