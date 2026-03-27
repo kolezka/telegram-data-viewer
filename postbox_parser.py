@@ -537,11 +537,15 @@ def export_account(
         if peer_key not in conversations:
             conversations[peer_key] = {
                 'peer_id': msg.get('peer_id'),
+                'all_peer_ids': set(),
                 'peer_name': msg.get('peer_name'),
                 'peer_username': msg.get('peer_username'),
                 'message_count': 0,
                 'messages': [],
             }
+        mid = msg.get('peer_id')
+        if mid is not None:
+            conversations[peer_key]['all_peer_ids'].add(mid)
         conversations[peer_key]['message_count'] += 1
         conversations[peer_key]['messages'].append({
             'text': msg['text'],
@@ -556,6 +560,7 @@ def export_account(
     convo_index = [
         {
             'peer_id': c['peer_id'],
+            'all_peer_ids': sorted(c['all_peer_ids']),
             'peer_name': c['peer_name'],
             'peer_username': c['peer_username'],
             'message_count': c['message_count'],
@@ -572,9 +577,10 @@ def export_account(
     convos_dir = account_dir / 'conversations'
     convos_dir.mkdir(exist_ok=True)
     for convo in sorted_convos:
+        export_convo = {**convo, 'all_peer_ids': sorted(convo['all_peer_ids'])}
         safe_name = re.sub(r'[^\w\-]', '_', str(convo.get('peer_username') or convo.get('peer_name') or str(convo.get('peer_id', 'unknown'))))[:80]
         with open(convos_dir / f'{safe_name}.json', 'w', encoding='utf-8') as f:
-            json.dump(convo, f, indent=2, ensure_ascii=False)
+            json.dump(export_convo, f, indent=2, ensure_ascii=False)
 
     print(f"    {len(conversations)} conversations saved")
     print(f"    Total combined: {len(all_messages):,} messages")

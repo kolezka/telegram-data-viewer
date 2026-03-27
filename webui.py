@@ -277,6 +277,11 @@ def get_messages():
     search = request.args.get('search', '').lower()
     peer_id = request.args.get('peer_id', '')
 
+    # Support multiple peer_ids (comma-separated) for conversations spanning secret+regular chats
+    peer_id_set: set = set()
+    if peer_id:
+        peer_id_set = set(peer_id.split(','))
+
     all_messages = []
 
     # Collect messages from specified database or all databases
@@ -287,8 +292,8 @@ def get_messages():
         messages = db_data.get('messages', [])
 
         for msg in messages:
-            # Filter by peer_id
-            if peer_id and str(msg.get('peer_id', '')) != peer_id:
+            # Filter by peer_id(s)
+            if peer_id_set and str(msg.get('peer_id', '')) not in peer_id_set:
                 continue
 
             # Add database/account info to message
@@ -302,6 +307,29 @@ def get_messages():
                     continue
 
             all_messages.append(msg)
+
+        # Include FTS (cached/deleted) messages
+        fts_peer_refs = {f'p{pid}' for pid in peer_id_set} if peer_id_set else set()
+        for fts_msg in db_data.get('messages_fts', []):
+            ref = str(fts_msg.get('peer_ref', ''))
+            if fts_peer_refs and ref not in fts_peer_refs:
+                continue
+
+            fts_text = fts_msg.get('text', '')
+            if search and search not in fts_text.lower():
+                continue
+
+            all_messages.append({
+                'text': fts_text,
+                'peer_id': ref.lstrip('p'),
+                'source': 'fts',
+                'fts_id': fts_msg.get('fts_id'),
+                'msg_ref': fts_msg.get('msg_ref', ''),
+                'timestamp': 0,
+                'outgoing': False,
+                '_database': db,
+                '_account': db,
+            })
 
     # Sort by timestamp if available
     try:
@@ -343,14 +371,17 @@ def get_chats():
         if conversations:
             for conv in conversations:
                 chat_id = str(conv.get('peer_id', ''))
+                all_ids = [str(x) for x in conv.get('all_peer_ids', [])] or ([chat_id] if chat_id else [])
                 if chat_id and chat_id not in chats:
                     pid = conv.get('peer_id') or 0
+                    has_fts = any(aid in fts_peer_refs for aid in all_ids)
                     chats[chat_id] = {
                         'id': chat_id,
+                        'all_peer_ids': all_ids,
                         'name': conv.get('peer_name') or f"Chat {chat_id}",
                         'username': conv.get('peer_username') or '',
                         'type': _peer_type(pid),
-                        'has_fts': chat_id in fts_peer_refs,
+                        'has_fts': has_fts,
                         'message_count': conv.get('message_count', 0),
                         'last_message': conv.get('last_message'),
                         'databases': [db_name],
@@ -377,6 +408,7 @@ def get_chats():
                     pid = msg.get('peer_id') or 0
                     chats[chat_id] = {
                         'id': chat_id,
+                        'all_peer_ids': [chat_id],
                         'name': chat_name or f"Chat {chat_id}",
                         'username': msg.get('peer_username') or '',
                         'type': _peer_type(pid) if isinstance(pid, int) else 'other',
@@ -582,6 +614,7 @@ def create_templates():
         .conv-message { padding: 10px 14px; margin-bottom: 6px; border-radius: 12px; max-width: 80%; }
         .conv-message.incoming { background: #f0f0f0; align-self: flex-start; border-bottom-left-radius: 2px; }
         .conv-message.outgoing { background: #dcf8c6; align-self: flex-end; border-bottom-right-radius: 2px; }
+        .conv-message.fts-message { border-left: 3px solid #c55; }
         .conv-message .msg-time { font-size: 0.8em; color: #888; }
         .conv-message .msg-text { margin-top: 4px; }
         .conv-message img { max-width: 100%; border-radius: 8px; margin-top: 6px; cursor: pointer; display: block; }
@@ -779,8 +812,8 @@ def create_templates():
             chatList.innerHTML = '';
             chats.forEach(chat => {
                 const item = document.createElement('div');
-                item.className = 'chat-item' + (selectedChatId === chat.id ? ' selected' : '');
-                item.onclick = () => openConversation(chat.id, chat.name);
+                item.className = 'chat-item' + (selectedChatId && selectedChatId.split(',').includes(chat.id) ? ' selected' : '');
+                item.onclick = () => openConversation(chat.all_peer_ids || [chat.id], chat.name);
 
                 const info = document.createElement('div');
                 info.className = 'chat-info';
@@ -823,8 +856,8 @@ def create_templates():
             chatSearchTimeout = setTimeout(() => loadChats(), 300);
         }
 
-        async function openConversation(peerId, peerName) {
-            selectedChatId = peerId;
+        async function openConversation(peerIds, peerName) {
+            selectedChatId = Array.isArray(peerIds) ? peerIds.join(',') : peerIds;
             selectedChatName = peerName;
             await loadChats();
             loadConversation(1);
@@ -869,11 +902,13 @@ def create_templates():
             container.className = 'conversation-messages';
             msgs.forEach(msg => {
                 const el = document.createElement('div');
+                const isFts = msg.source === 'fts';
                 const direction = msg.outgoing ? 'outgoing' : 'incoming';
-                el.className = 'conv-message ' + direction;
+                el.className = 'conv-message ' + direction + (isFts ? ' fts-message' : '');
                 const time = document.createElement('span');
                 time.className = 'msg-time';
-                time.textContent = formatTimestamp(msg.timestamp || msg.date) + (msg.outgoing ? ' (you)' : '');
+                const ts = msg.timestamp || msg.date || 0;
+                time.textContent = (ts ? formatTimestamp(ts) : 'cached') + (msg.outgoing ? ' (you)' : '');
                 const text = document.createElement('div');
                 text.className = 'msg-text';
                 const msgText = msg.text || msg.message || msg.content || '';
