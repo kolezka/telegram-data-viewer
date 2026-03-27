@@ -103,6 +103,13 @@ METADATA_STRINGS = frozenset({
     'ssc', 'vfid', 'emjs', 'biri', 'fl',
 })
 
+# Metadata field names that indicate serialized Postbox data when found as substrings
+_METADATA_SUBSTRINGS = (
+    '_rawValue', 'entities', 'channelId', 'fileId', 'discriminator',
+    'patternColor', 'textColor', 'innerColor', 'outerColor',
+    'patternFileId', 'bubbleUpEmojiOrStickersets', 'cidbubbleUp',
+)
+
 
 def _looks_like_metadata(text: str) -> bool:
     """Return True if text looks like serialized metadata, not a real message."""
@@ -112,9 +119,13 @@ def _looks_like_metadata(text: str) -> bool:
     # Filter short strings that are just field tags with padding
     if len(stripped) < 4 and not any(c.isalpha() for c in stripped):
         return True
-    # Filter strings that are mostly metadata field names
-    if re.match(r'^[\s]*entities[\s]*$', stripped):
+    # Text containing null bytes is binary data, not a real message
+    if '\x00' in stripped:
         return True
+    # Check for metadata field names embedded in binary-mixed text
+    for substr in _METADATA_SUBSTRINGS:
+        if substr in stripped:
+            return True
     return False
 
 
@@ -353,8 +364,18 @@ def parse_messages_from_t7(
             if not text and not media:
                 continue
 
-            # Byte 10 of message value contains flags; bit 2 (0x04) = outgoing
-            is_outgoing = bool(len(value) > 10 and value[10] & 0x04)
+            # Determine outgoing flag based on message format.
+            # Byte 9 is a format discriminator:
+            #   0x00 = standard (user/group/bot): flags at byte 10, bit 2 = outgoing
+            #   0x01 = secret chat: flags at byte 10, bit 2 = outgoing
+            #   0x20/0x2c = channel format: flags at byte 18, but bit 2 means
+            #     "channel posted this" (always set), NOT "user sent this"
+            # For channels (hi=2), messages are always incoming from user perspective.
+            hi = (peer_id >> 32) & 0xFFFFFFFF
+            if hi == 2:
+                is_outgoing = False
+            else:
+                is_outgoing = bool(len(value) > 10 and value[10] & 0x04)
 
             msg = {
                 'peer_id': peer_id,

@@ -6,6 +6,11 @@ decrypted_data/
 parsed_data/
 *.tar.gz
 
+.tempkeyEncrypted
+accounts-shared-data
+accounts-metadata/
+notificationsKey
+
 # Database files
 *.db
 *.sqlite
