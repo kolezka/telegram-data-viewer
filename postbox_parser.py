@@ -23,6 +23,8 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, Tuple
 
+import redact
+
 
 def parse_peer_from_t2(key: int, value: bytes) -> Optional[Dict[str, Any]]:
     """Parse peer info from t2 table.
@@ -760,12 +762,15 @@ def main():
     parser.add_argument('--password', default='no-matter-key', help='Passcode')
     parser.add_argument('--output', help='Output directory')
     parser.add_argument('--account', help='Only process specific account ID')
+    parser.add_argument('--redact', action='store_true',
+                        help='Mask sensitive values (account IDs, keys, paths) in console output')
 
     args = parser.parse_args()
+    redact.set_enabled(args.redact)
     backup_dir = Path(args.backup_dir)
 
     if not backup_dir.exists():
-        print(f"ERROR: {backup_dir} not found")
+        print(f"ERROR: {redact.path(backup_dir)} not found")
         sys.exit(1)
 
     # Get keys
@@ -787,10 +792,10 @@ def main():
             print("ERROR: No --db-key/--db-salt and no .tempkeyEncrypted found")
             sys.exit(1)
 
-        print(f"Decrypting tempkey: {tempkey_path}")
+        print(f"Decrypting tempkey: {redact.path(tempkey_path)}")
         db_key, db_salt = decrypt_tempkey(tempkey_path, args.password)
-        print(f"  Key: {db_key.hex()[:8]}...{db_key.hex()[-4:]}")
-        print(f"  Salt: {db_salt.hex()[:8]}...{db_salt.hex()[-4:]}")
+        print(f"  Key: {redact.hexkey(db_key.hex()[:8] + '...' + db_key.hex()[-4:])}")
+        print(f"  Salt: {redact.hexkey(db_salt.hex()[:8] + '...' + db_salt.hex()[-4:])}")
 
     output_dir = Path(args.output) if args.output else backup_dir / "parsed_data"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -815,12 +820,12 @@ def main():
         db_path = account_dir / "postbox" / "db" / "db_sqlite"
 
         if not db_path.exists():
-            print(f"\nAccount {account_id}: no database")
+            print(f"\nAccount {redact.account(account_id)}: no database")
             continue
 
         db_size_mb = db_path.stat().st_size / 1024 / 1024
         print(f"\n{'='*60}")
-        print(f"Account: {account_id} ({db_size_mb:.1f} MB)")
+        print(f"Account: {redact.account(account_id)} ({db_size_mb:.1f} MB)")
         print(f"{'='*60}")
 
         try:
@@ -846,7 +851,7 @@ def main():
     print(f"\n{'='*60}")
     print(f"EXPORT COMPLETE")
     print(f"  Total messages: {summary['total_messages']:,}")
-    print(f"  Output: {output_dir}")
+    print(f"  Output: {redact.path(output_dir)}")
     print(f"{'='*60}")
 
 
