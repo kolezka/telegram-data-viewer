@@ -129,6 +129,63 @@ def _looks_like_metadata(text: str) -> bool:
     return False
 
 
+MIME_SIGNATURES = [
+    (b'\xff\xd8\xff', 'image/jpeg'),
+    (b'\x89PNG\r\n\x1a\n', 'image/png'),
+    (b'GIF87a', 'image/gif'),
+    (b'GIF89a', 'image/gif'),
+    (b'\x1a\x45\xdf\xa3', 'video/webm'),
+    (b'OggS', 'audio/ogg'),
+    (b'\xff\xfb', 'audio/mpeg'),
+    (b'\xff\xf3', 'audio/mpeg'),
+    (b'\xff\xf2', 'audio/mpeg'),
+    (b'ID3', 'audio/mpeg'),
+    (b'%PDF', 'application/pdf'),
+    (b'\x1f\x8b', 'application/gzip'),
+]
+
+
+def detect_mime_type(filepath: Path) -> str:
+    """Detect MIME type from file magic bytes."""
+    try:
+        with open(filepath, 'rb') as f:
+            header = f.read(12)
+    except OSError:
+        return 'application/octet-stream'
+
+    for sig, mime in MIME_SIGNATURES:
+        if header.startswith(sig):
+            return mime
+
+    # RIFF container: check for WEBP at offset 8
+    if header[:4] == b'RIFF' and len(header) >= 12 and header[8:12] == b'WEBP':
+        return 'image/webp'
+
+    # ftyp container (MP4/M4A/MOV): check subtype at offset 8
+    if len(header) >= 12 and header[4:8] == b'ftyp':
+        subtype = header[8:12]
+        if subtype == b'M4A ':
+            return 'audio/mp4'
+        return 'video/mp4'
+
+    return 'application/octet-stream'
+
+
+def classify_media_type(mime: str, filename: str) -> str:
+    """Classify a file into a media type category."""
+    if '-tgs' in filename or filename.endswith('.tgs'):
+        return 'sticker'
+    if mime.startswith('image/gif'):
+        return 'gif'
+    if mime.startswith('image/'):
+        return 'photo'
+    if mime.startswith('video/'):
+        return 'video'
+    if mime.startswith('audio/'):
+        return 'audio'
+    return 'document'
+
+
 def extract_text_from_message(value: bytes) -> Optional[str]:
     """Extract message text from t7 serialized value.
 
@@ -299,6 +356,89 @@ def build_media_index(media_dir: Path) -> set:
         if f.is_file() and not f.name.endswith('_partial.meta') and not f.name.endswith('_partial'):
             index.add(f.name)
     return index
+
+
+def build_media_catalog(
+    media_dir: Path,
+    messages: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Build a full media catalog by scanning the media directory.
+
+    Cross-references files against parsed messages to link media to conversations.
+    Returns a list of catalog entries with MIME type, size, dimensions, and linkage.
+    """
+    if not media_dir.is_dir():
+        return []
+
+    # Build filename -> message media info lookup from messages.json
+    filename_to_msg: Dict[str, Dict[str, Any]] = {}
+    for msg in messages:
+        for m in msg.get('media', []):
+            fname = m.get('filename')
+            if fname and fname not in filename_to_msg:
+                filename_to_msg[fname] = {
+                    'peer_id': msg.get('peer_id'),
+                    'peer_name': msg.get('peer_name'),
+                    'timestamp': msg.get('timestamp'),
+                    'date': msg.get('date'),
+                    'width': m.get('width'),
+                    'height': m.get('height'),
+                }
+
+    catalog = []
+    file_count = 0
+
+    for filepath in sorted(media_dir.iterdir()):
+        if not filepath.is_file():
+            continue
+        if filepath.name.endswith('_partial') or filepath.name.endswith('_partial.meta'):
+            continue
+
+        file_count += 1
+        if file_count % 500 == 0:
+            print(f"    Scanning media: {file_count} files...")
+
+        stat = filepath.stat()
+        mime = detect_mime_type(filepath)
+        media_type = classify_media_type(mime, filepath.name)
+
+        entry = {
+            'filename': filepath.name,
+            'mime_type': mime,
+            'size_bytes': stat.st_size,
+            'width': None,
+            'height': None,
+            'media_type': media_type,
+            'thumbnail': None,
+            'linked_message': None,
+        }
+
+        # For photos, find a smaller Telegram variant for thumbnails
+        # Telegram stores photos with suffixes: y(largest), x, w, m, c, s(smallest)
+        if media_type == 'photo' and 'telegram-cloud-photo-size-' in filepath.name:
+            base = filepath.name.rsplit('-', 1)[0]  # strip the suffix
+            for thumb_suffix in ['s', 'm', 'c']:
+                thumb_name = base + '-' + thumb_suffix
+                if (media_dir / thumb_name).is_file():
+                    entry['thumbnail'] = thumb_name
+                    break
+
+        # Link to message if available
+        msg_info = filename_to_msg.get(filepath.name)
+        if msg_info:
+            entry['width'] = msg_info.get('width')
+            entry['height'] = msg_info.get('height')
+            entry['linked_message'] = {
+                'peer_id': msg_info['peer_id'],
+                'peer_name': msg_info.get('peer_name'),
+                'timestamp': msg_info.get('timestamp'),
+                'date': msg_info.get('date'),
+            }
+
+        catalog.append(entry)
+
+    print(f"    Media catalog: {len(catalog)} files ({file_count} scanned)")
+    return catalog
 
 
 def parse_message_key(key: bytes) -> Dict[str, Any]:
