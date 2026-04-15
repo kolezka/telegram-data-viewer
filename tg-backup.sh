@@ -48,6 +48,15 @@ ok()     { echo -e "${GREEN}[OK]${NC}    $*"; }
 warn()   { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 die()    { echo -e "${RED}[ERROR]${NC} $*" >&2; exit 1; }
 
+# Redact tg_<timestamp> segments in paths when TG_REDACT=1
+_redact_path() {
+    if [[ "${TG_REDACT:-0}" == "1" ]]; then
+        echo "$1" | sed -E 's|tg_[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}|<backup>|g'
+    else
+        echo "$1"
+    fi
+}
+
 # ── Sanity checks ─────────────────────────────────────────────────────────────
 if pgrep -x "Telegram" > /dev/null 2>&1 && [[ "$BATCH_MODE" == false ]]; then
   warn "Telegram is currently running."
@@ -116,11 +125,13 @@ for d in "${ACCOUNT_DIRS[@]}"; do
   dir_id="${dir_name#account-}"
   label=$(get_account_name "$dir_id")
   db_path="$d/postbox/db/db_sqlite"
+  safe_name="$dir_name"
+  [[ "${TG_REDACT:-0}" == "1" ]] && safe_name="account-***"
   if [[ -f "$db_path" ]]; then
     db_size=$(du -sh "$db_path" 2>/dev/null | cut -f1)
-    log "  $dir_name ($label) — postbox DB: $db_size"
+    log "  $safe_name ($label) — postbox DB: $db_size"
   else
-    log "  $dir_name ($label) — no postbox DB found"
+    log "  $safe_name ($label) — no postbox DB found"
   fi
 done
 echo ""
@@ -150,7 +161,9 @@ for d in "${ACCOUNT_DIRS[@]}"; do
   dir_id="${dir_name#account-}"
   label=$(get_account_name "$dir_id")
   echo ""
-  log "━━━ Backing up $dir_name ($label) ━━━"
+  safe_name="$dir_name"
+  [[ "${TG_REDACT:-0}" == "1" ]] && safe_name="account-***"
+  log "━━━ Backing up $safe_name ($label) ━━━"
 
   acct_backup="$BACKUP_DIR/$dir_name"
   mkdir -p "$acct_backup"
@@ -203,12 +216,12 @@ done
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 ok "Backup complete!"
-ok "Location: $BACKUP_DIR"
+ok "Location: $(_redact_path "$BACKUP_DIR")"
 ok "Total size: $(du -sh "$BACKUP_DIR" 2>/dev/null | cut -f1)"
 echo ""
 log "Next steps:"
-log "  • Run './extract-keys.sh $BACKUP_DIR' to extract encryption keys"
-log "  • Run './tg_decrypt.py $BACKUP_DIR' to decrypt the databases"
+log "  • Run './extract-keys.sh $(_redact_path "$BACKUP_DIR")' to extract encryption keys"
+log "  • Run './tg_decrypt.py $(_redact_path "$BACKUP_DIR")' to decrypt the databases"
 log "  • Run './webui.py' to browse messages in the web interface"
 log ""
 log "Or simply use: './tg-viewer full' to run the complete workflow automatically"
@@ -221,6 +234,6 @@ if [[ "$BATCH_MODE" == false ]]; then
     ARCHIVE="$DEST/tg_$TIMESTAMP.tar.gz"
     log "Compressing..."
     tar -czf "$ARCHIVE" -C "$DEST" "tg_$TIMESTAMP"
-    ok "Archive: $ARCHIVE ($(du -sh "$ARCHIVE" | cut -f1))"
+    ok "Archive: $(_redact_path "$ARCHIVE") ($(du -sh "$ARCHIVE" | cut -f1))"
   fi
 fi
