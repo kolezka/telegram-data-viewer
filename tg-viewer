@@ -22,6 +22,15 @@ warn()   { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 die()    { echo -e "${RED}[ERROR]${NC} $*" >&2; exit 1; }
 title()  { echo -e "\n${BLUE}=== $* ===${NC}"; }
 
+# Redact tg_<timestamp> segments in paths when TG_REDACT=1
+_redact_path() {
+    if [[ "${TG_REDACT:-0}" == "1" ]]; then
+        echo "$1" | sed -E 's|tg_[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}|<backup>|g'
+    else
+        echo "$1"
+    fi
+}
+
 # ── Help ──────────────────────────────────────────────────────────────────────
 show_help() {
     cat << 'EOF'
@@ -56,6 +65,7 @@ WORKFLOW EXAMPLES:
 OPTIONS:
     --port PORT         Web UI port (default: 5000)
     --host HOST         Web UI host (default: 127.0.0.1)
+    --redact            Mask sensitive values (account IDs, keys, paths) in CLI output
     --help, -h          Show this help
 
 NOTES:
@@ -123,10 +133,10 @@ run_backup() {
         die "Backup script not found: $BACKUP_SCRIPT"
     fi
     
-    log "Running Telegram backup to: $dest_dir"
+    log "Running Telegram backup to: $(_redact_path "$dest_dir")"
     "$BACKUP_SCRIPT" "$dest_dir"
-    
-    echo "$dest_dir"  # Return the backup directory
+
+    echo "$dest_dir"  # Return the backup directory (used as pipe value — do not redact)
 }
 
 # Find the inner tg_* backup directory created by tg-backup.sh
@@ -157,8 +167,11 @@ run_decrypt() {
         die "Backup directory not found: $backup_dir"
     fi
 
-    log "Decrypting databases in: $backup_dir"
-    python3 "$APPSTORE_DECRYPT_SCRIPT" "$backup_dir"
+    local redact_arg=()
+    [[ "${TG_REDACT:-0}" == "1" ]] && redact_arg=(--redact)
+
+    log "Decrypting databases in: $(_redact_path "$backup_dir")"
+    python3 "$APPSTORE_DECRYPT_SCRIPT" "$backup_dir" "${redact_arg[@]+"${redact_arg[@]}"}"
 }
 
 run_parse() {
@@ -170,8 +183,11 @@ run_parse() {
         die "Backup directory not found: $backup_dir"
     fi
 
-    log "Parsing messages, peers, and conversations in: $backup_dir"
-    python3 "$POSTBOX_PARSER_SCRIPT" "$backup_dir"
+    local redact_arg=()
+    [[ "${TG_REDACT:-0}" == "1" ]] && redact_arg=(--redact)
+
+    log "Parsing messages, peers, and conversations in: $(_redact_path "$backup_dir")"
+    python3 "$POSTBOX_PARSER_SCRIPT" "$backup_dir" "${redact_arg[@]+"${redact_arg[@]}"}"
 }
 
 run_webui() {
@@ -190,7 +206,7 @@ run_webui() {
     fi
     
     log "Starting web interface..."
-    log "Data directory: $data_dir"
+    log "Data directory: $(_redact_path "$data_dir")"
     log "URL: http://$host:$port"
     
     python3 "$WEBUI_SCRIPT" "$data_dir" --host "$host" --port "$port"
@@ -250,7 +266,7 @@ EOF
     echo -e "${NC}"
     
     log "Starting complete Telegram data extraction workflow"
-    log "Destination: $dest_dir"
+    log "Destination: $(_redact_path "$dest_dir")"
     echo ""
     
     # Check for Telegram running before starting
@@ -265,8 +281,8 @@ EOF
     
     # Step 1: Backup
     title "Step 1: Backing up Telegram data"
-    log "Running Telegram backup to: $dest_dir"
-    
+    log "Running Telegram backup to: $(_redact_path "$dest_dir")"
+
     if [[ ! -f "$BACKUP_SCRIPT" ]]; then
         die "Backup script not found: $BACKUP_SCRIPT"
     fi
@@ -276,7 +292,7 @@ EOF
 
     # Find the actual backup dir (tg-backup.sh creates a tg_* subdir)
     backup_dir=$(find_inner_backup_dir "$dest_dir")
-    log "Using backup directory: $backup_dir"
+    log "Using backup directory: $(_redact_path "$backup_dir")"
 
     # Step 2: Decrypt (App Store .tempkeyEncrypted → SQLCipher)
     run_decrypt "$backup_dir"
@@ -289,15 +305,15 @@ EOF
     if [[ -d "$data_dir" ]]; then
         echo ""
         ok "Workflow complete!"
-        ok "Backup: $backup_dir"
-        ok "Data: $data_dir"
+        ok "Backup: $(_redact_path "$backup_dir")"
+        ok "Data: $(_redact_path "$data_dir")"
         echo ""
 
         read -rp "Start web UI now? [Y/n] " start_ui
         if [[ "$start_ui" != "n" && "$start_ui" != "N" ]]; then
             run_webui "$data_dir"
         else
-            log "To start web UI later, run: ./tg-viewer webui '$data_dir'"
+            log "To start web UI later, run: ./tg-viewer webui '$(_redact_path "$data_dir")'"
         fi
     else
         warn "Parsed data directory not found. Check output above for errors."
@@ -309,17 +325,23 @@ main() {
     local command="${1:-help}"
     local port="5000"
     local host="127.0.0.1"
-    
+    local redact=false
+
     # Parse global options
     while [[ $# -gt 0 ]]; do
         case $1 in
             --port) port="$2"; shift 2 ;;
             --host) host="$2"; shift 2 ;;
+            --redact) redact=true; shift ;;
             --help|-h) show_help; exit 0 ;;
             -*) die "Unknown option: $1" ;;
             *) break ;;
         esac
     done
+
+    if [[ "$redact" == true ]]; then
+        export TG_REDACT=1
+    fi
     
     command="${1:-help}"
     
