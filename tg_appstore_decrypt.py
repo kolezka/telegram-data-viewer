@@ -337,7 +337,7 @@ def main():
 
     if not tempkey_path or not Path(tempkey_path).exists():
         print("ERROR: .tempkeyEncrypted not found")
-        print("  Searched:", [str(c) for c in candidates])
+        print("  Searched:", [redact.path(str(c)) for c in candidates])
         sys.exit(1)
 
     print(f"Using tempkey: {redact.path(tempkey_path)}")
