@@ -23,6 +23,8 @@ from pathlib import Path
 from typing import Optional, Tuple, Dict, List, Any
 from datetime import datetime
 
+import redact
+
 # AES-CBC decryption
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
@@ -310,12 +312,15 @@ def main():
                         help='Local passcode (default: "no-matter-key" = no passcode)')
     parser.add_argument('--output', help='Output directory (default: backup_dir/decrypted_data)')
     parser.add_argument('--tempkey', help='Path to .tempkeyEncrypted file')
+    parser.add_argument('--redact', action='store_true',
+                        help='Mask sensitive values (account IDs, keys, paths) in console output')
 
     args = parser.parse_args()
+    redact.set_enabled(args.redact)
     backup_dir = Path(args.backup_dir)
 
     if not backup_dir.exists():
-        print(f"ERROR: Directory not found: {backup_dir}")
+        print(f"ERROR: Directory not found: {redact.path(backup_dir)}")
         sys.exit(1)
 
     # Find .tempkeyEncrypted
@@ -335,14 +340,14 @@ def main():
         print("  Searched:", [str(c) for c in candidates])
         sys.exit(1)
 
-    print(f"Using tempkey: {tempkey_path}")
+    print(f"Using tempkey: {redact.path(tempkey_path)}")
     print(f"Password: {'<custom>' if args.password != 'no-matter-key' else 'no-matter-key (default)'}")
 
     # Step 1: Decrypt the tempkey
     print("\n--- Step 1: Decrypt .tempkeyEncrypted ---")
     db_key, db_salt = decrypt_tempkey(tempkey_path, args.password)
-    print(f"  dbKey:  {db_key.hex()[:8]}...{db_key.hex()[-4:]}")
-    print(f"  dbSalt: {db_salt.hex()[:8]}...{db_salt.hex()[-4:]}")
+    print(f"  dbKey:  {redact.hexkey(db_key.hex()[:8] + '...' + db_key.hex()[-4:])}")
+    print(f"  dbSalt: {redact.hexkey(db_salt.hex()[:8] + '...' + db_salt.hex()[-4:])}")
 
     # Step 2: Find and decrypt databases
     print("\n--- Step 2: Find databases ---")
@@ -362,11 +367,11 @@ def main():
         db_path = account_dir / "postbox" / "db" / "db_sqlite"
 
         if not db_path.exists():
-            print(f"\n  {account_dir.name}: No database found")
+            print(f"\n  account-{redact.account(account_id)}: No database found")
             continue
 
-        print(f"\n--- Account: {account_id} ---")
-        print(f"  Database: {db_path} ({db_path.stat().st_size / 1024 / 1024:.1f} MB)")
+        print(f"\n--- Account: {redact.account(account_id)} ---")
+        print(f"  Database: {redact.path(db_path)} ({db_path.stat().st_size / 1024 / 1024:.1f} MB)")
 
         try:
             conn = open_database(str(db_path), db_key, db_salt)
@@ -409,8 +414,8 @@ def main():
 
     print(f"\n{'='*60}")
     print(f"DONE: {total_messages} total rows extracted")
-    print(f"Output: {output_dir}")
-    print(f"Summary: {summary_file}")
+    print(f"Output: {redact.path(output_dir)}")
+    print(f"Summary: {redact.path(summary_file)}")
 
 
 if __name__ == "__main__":
