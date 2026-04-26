@@ -5,9 +5,13 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from webui.loader import load_telegram_data
 from webui.state import AppState
+
+
+WEB_DIST = Path(__file__).resolve().parent.parent.parent / "web" / "dist"
 
 
 def create_app(data_dir: str | Path | None = None) -> FastAPI:
@@ -32,20 +36,23 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
         lifespan=lifespan,
     )
 
-    from webui.routers import pages
-    app.include_router(pages.router)
-    from webui.routers import databases
+    # API routers FIRST. The order matters because StaticFiles(html=True) below
+    # is a catch-all that swallows any unmatched path.
+    from webui.routers import databases, users, chats, messages, media, stats, export_data
     app.include_router(databases.router)
-    from webui.routers import users
     app.include_router(users.router)
-    from webui.routers import chats
     app.include_router(chats.router)
-    from webui.routers import messages
     app.include_router(messages.router)
-    from webui.routers import media
     app.include_router(media.router)
-    from webui.routers import stats
     app.include_router(stats.router)
-    from webui.routers import export_data
     app.include_router(export_data.router)
+
+    # If web/dist exists, mount it at /. Otherwise fall back to the transitional
+    # pages router (templates/index.html). Task 15 removes the fallback.
+    if WEB_DIST.is_dir():
+        app.mount("/", StaticFiles(directory=str(WEB_DIST), html=True), name="webdist")
+    else:
+        from webui.routers import pages
+        app.include_router(pages.router)
+
     return app
