@@ -59,22 +59,51 @@
         .chat-type-tag.channel { background: #e0ffe0; color: #070; }
         .chat-type-tag.group { background: #fff3e0; color: #a60; }
         .chat-type-tag.fts { background: #fff0f0; color: #c55; }
-        .conversation-panel { margin-top: 15px; border-top: 2px solid #0088cc; padding-top: 15px; }
-        .conversation-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        .conversation-header h3 { color: #0088cc; }
-        .conversation-header button { padding: 6px 14px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer; }
-        .conversation-header button:hover { background: #f8f9fa; }
 
-        .conv-message { padding: 10px 14px; margin-bottom: 6px; border-radius: 12px; max-width: 80%; }
-        .conv-message.incoming { background: #f0f0f0; align-self: flex-start; border-bottom-left-radius: 2px; }
-        .conv-message.outgoing { background: #dcf8c6; align-self: flex-end; border-bottom-right-radius: 2px; }
+        /* Modal dialog for active chat */
+        .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+        .modal-backdrop.open { display: flex; }
+        .modal-dialog { background: white; border-radius: 12px; width: min(900px, 100%); max-height: calc(100vh - 40px); display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.3); overflow: hidden; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #e6e6e6; background: #fafafa; }
+        .modal-header h3 { color: #0088cc; font-size: 1.1em; }
+        .modal-header .modal-close { padding: 6px 14px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer; font-size: 1em; }
+        .modal-header .modal-close:hover { background: #f0f0f0; }
+        .modal-body { padding: 16px 20px; overflow-y: auto; flex: 1 1 auto; background: #efeae2; }
+        .modal-footer { padding: 10px 20px; border-top: 1px solid #e6e6e6; background: #fafafa; text-align: center; }
+
+        .conv-message { padding: 10px 14px; margin-bottom: 6px; border-radius: 12px; max-width: 80%; word-wrap: break-word; }
+        .conv-message.incoming { background: #ffffff; align-self: flex-start; border-bottom-left-radius: 2px; box-shadow: 0 1px 1px rgba(0,0,0,0.08); }
+        .conv-message.outgoing { background: #dcf8c6; align-self: flex-end; border-bottom-right-radius: 2px; box-shadow: 0 1px 1px rgba(0,0,0,0.08); }
+        .conv-message.unknown { background: #fff8e1; align-self: center; border: 1px dashed #d4a000; max-width: 70%; }
         .conv-message.fts-message { border-left: 3px solid #c55; }
         .conv-message .msg-time { font-size: 0.8em; color: #888; }
-        .conv-message .msg-text { margin-top: 4px; }
+        .conv-message .msg-text { margin-top: 4px; white-space: pre-wrap; }
         .conv-message img { max-width: 100%; border-radius: 8px; margin-top: 6px; cursor: pointer; display: block; }
         .conv-message video { max-width: 100%; border-radius: 8px; margin-top: 6px; display: block; }
-        .conversation-messages { max-height: 500px; overflow-y: auto; display: flex; flex-direction: column; }
+        .conversation-messages { display: flex; flex-direction: column; }
         .error { color: #dc3545; padding: 20px; text-align: center; }
+
+        /* Media gallery */
+        .media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+        .media-item { position: relative; aspect-ratio: 1; background: #ddd; border-radius: 6px; overflow: hidden; cursor: pointer; transition: transform 0.1s; }
+        .media-item:hover { transform: scale(1.02); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .media-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .media-item .media-placeholder { display: flex; align-items: center; justify-content: center; height: 100%; flex-direction: column; padding: 8px; text-align: center; color: #555; font-size: 0.85em; background: #f0f0f0; }
+        .media-item .media-placeholder .icon { font-size: 2em; margin-bottom: 4px; }
+        .media-item .media-meta { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.7)); color: white; padding: 8px 6px 4px; font-size: 0.7em; line-height: 1.2; pointer-events: none; }
+        .media-item .media-type-badge { position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.65); color: white; font-size: 0.7em; padding: 2px 6px; border-radius: 8px; }
+        .media-item video { width: 100%; height: 100%; object-fit: cover; display: block; background: #000; pointer-events: none; }
+        .media-item .play-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+        .media-item .play-overlay::before { content: ''; width: 44px; height: 44px; border-radius: 50%; background: rgba(0,0,0,0.55); }
+        .media-item .play-overlay::after { content: ''; position: absolute; border-style: solid; border-width: 8px 0 8px 14px; border-color: transparent transparent transparent white; margin-left: 4px; }
+
+        /* Lightbox */
+        .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: none; align-items: center; justify-content: center; z-index: 1100; padding: 20px; flex-direction: column; }
+        .lightbox.open { display: flex; }
+        .lightbox img, .lightbox video { max-width: 100%; max-height: 80vh; }
+        .lightbox-info { color: white; margin-top: 12px; text-align: center; font-size: 0.9em; }
+        .lightbox-info a { color: #4ec3ff; }
+        .lightbox-close { position: absolute; top: 14px; right: 16px; background: transparent; border: none; color: white; font-size: 2em; cursor: pointer; line-height: 1; }
     </style>
 </head>
 <body>
@@ -105,10 +134,11 @@
 
         <div class="tabs">
             <div class="tab-buttons">
-                <button class="tab-button active" onclick="showTab('messages')">Messages</button>
-                <button class="tab-button" onclick="showTab('chats')">Chats</button>
-                <button class="tab-button" onclick="showTab('users')">Users</button>
-                <button class="tab-button" onclick="showTab('databases')">Databases</button>
+                <button class="tab-button active" data-tab="messages" onclick="showTab('messages', this)">Messages</button>
+                <button class="tab-button" data-tab="chats" onclick="showTab('chats', this)">Chats</button>
+                <button class="tab-button" data-tab="media" onclick="showTab('media', this)">Media</button>
+                <button class="tab-button" data-tab="users" onclick="showTab('users', this)">Users</button>
+                <button class="tab-button" data-tab="databases" onclick="showTab('databases', this)">Databases</button>
             </div>
 
             <div class="tab-content">
@@ -126,8 +156,15 @@
                     <div class="chat-list" id="chat-list">
                         <div class="loading">Loading chats...</div>
                     </div>
-                    <div id="conversation-panel"></div>
-                    <div class="pagination" id="conversation-pagination"></div>
+                </div>
+
+                <div class="tab-pane" id="media-tab">
+                    <input type="text" class="search-box" id="media-search" placeholder="Search media by filename or chat name..." onkeyup="searchMedia()">
+                    <div class="filter-bar" id="media-filters"></div>
+                    <div class="media-grid" id="media-grid">
+                        <div class="loading">Loading media...</div>
+                    </div>
+                    <div class="pagination" id="media-pagination"></div>
                 </div>
 
                 <div class="tab-pane" id="users-tab">
@@ -147,14 +184,39 @@
         </div>
     </div>
 
+    <!-- Conversation modal -->
+    <div class="modal-backdrop" id="conversation-modal" onclick="onModalBackdropClick(event)">
+        <div class="modal-dialog" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 id="modal-title">Conversation</h3>
+                <button class="modal-close" onclick="closeConversation()">✕ Close</button>
+            </div>
+            <div class="modal-body">
+                <div class="conversation-messages" id="conversation-messages"></div>
+            </div>
+            <div class="modal-footer">
+                <div class="pagination" id="conversation-pagination"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lightbox for media preview -->
+    <div class="lightbox" id="lightbox" onclick="closeLightbox()">
+        <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+        <div id="lightbox-content"></div>
+        <div class="lightbox-info" id="lightbox-info"></div>
+    </div>
+
     <script>
         let currentPage = 1;
         let searchTimeout;
         let chatSearchTimeout;
         let userSearchTimeout;
+        let mediaSearchTimeout;
         let selectedChatId = null;
         let selectedChatName = null;
         let chatTypeFilter = '';
+        let mediaTypeFilter = '';
 
         async function fetchAPI(endpoint) {
             try {
@@ -180,25 +242,24 @@
             const search = document.getElementById('message-search').value;
             const params = new URLSearchParams({ page, per_page: 50 });
             if (search) params.append('search', search);
-            
+
             const data = await fetchAPI(`messages?${params}`);
             const messageList = document.getElementById('message-list');
-            
+
             if (!data || !data.messages) {
                 messageList.innerHTML = '<div class="error">Failed to load messages</div>';
                 return;
             }
-            
+
             if (data.messages.length === 0) {
                 messageList.innerHTML = '<div class="loading">No messages found</div>';
                 return;
             }
-            
+
             messageList.innerHTML = data.messages.map(msg => `
                 <div class="message">
                     <div class="message-meta">
-                        Database: ${msg._database || 'Unknown'} | 
-                        Table: ${msg._table || 'Unknown'} |
+                        Database: ${msg._database || 'Unknown'} |
                         Time: ${formatTimestamp(msg.timestamp || msg.date)}
                     </div>
                     <div class="message-content">
@@ -206,22 +267,14 @@
                     </div>
                 </div>
             `).join('');
-            
-            // Update pagination
+
             updatePagination(data, 'message-pagination', loadMessages);
         }
 
-        function escapeHtml(str) {
-            const div = document.createElement('div');
-            div.textContent = str;
-            return div.innerHTML;
-        }
-
-        function renderChatFilters(allChats) {
+        function renderChatFilters() {
             const bar = document.getElementById('chat-filters');
             bar.innerHTML = '';
 
-            // Count types from unfiltered data (fetch all to count)
             const filters = [
                 { key: '', label: 'All' },
                 { key: 'secret', label: 'Secret' },
@@ -251,7 +304,7 @@
             const chats = await fetchAPI(`chats?${params}`);
             const chatList = document.getElementById('chat-list');
 
-            renderChatFilters(chats || []);
+            renderChatFilters();
 
             if (!chats) {
                 chatList.textContent = 'Failed to load chats';
@@ -274,7 +327,6 @@
                 const h4 = document.createElement('h4');
                 h4.textContent = chat.name;
 
-                // Type tag
                 if (chat.type && chat.type !== 'other') {
                     const tag = document.createElement('span');
                     tag.className = 'chat-type-tag ' + chat.type;
@@ -313,38 +365,32 @@
         async function openConversation(peerIds, peerName) {
             selectedChatId = Array.isArray(peerIds) ? peerIds.join(',') : peerIds;
             selectedChatName = peerName;
-            await loadChats();
-            loadConversation(1);
+            document.getElementById('conversation-modal').classList.add('open');
+            document.body.style.overflow = 'hidden';
+            await loadConversation(1);
+        }
+
+        function onModalBackdropClick(e) {
+            if (e.target.id === 'conversation-modal') {
+                closeConversation();
+            }
         }
 
         async function loadConversation(page = 1) {
-            const panel = document.getElementById('conversation-panel');
-            if (!selectedChatId) { panel.textContent = ''; return; }
+            const messagesContainer = document.getElementById('conversation-messages');
+            const title = document.getElementById('modal-title');
+            if (!selectedChatId) { messagesContainer.innerHTML = ''; return; }
+
+            messagesContainer.innerHTML = '<div class="loading">Loading conversation...</div>';
 
             const params = new URLSearchParams({ peer_id: selectedChatId, page, per_page: 50 });
             const data = await fetchAPI(`messages?${params}`);
 
-            panel.innerHTML = '';
-            const wrapper = document.createElement('div');
-            wrapper.className = 'conversation-panel';
-
-            const header = document.createElement('div');
-            header.className = 'conversation-header';
-            const title = document.createElement('h3');
-            title.textContent = selectedChatName + ' (' + (data ? data.total.toLocaleString() : '0') + ' messages)';
-            const closeBtn = document.createElement('button');
-            closeBtn.textContent = 'Close';
-            closeBtn.onclick = closeConversation;
-            header.appendChild(title);
-            header.appendChild(closeBtn);
-            wrapper.appendChild(header);
+            title.textContent = (selectedChatName || 'Conversation') + ' (' + (data ? data.total.toLocaleString() : '0') + ' messages)';
 
             if (!data || !data.messages || data.messages.length === 0) {
-                const empty = document.createElement('div');
-                empty.className = 'loading';
-                empty.textContent = 'No messages found';
-                wrapper.appendChild(empty);
-                panel.appendChild(wrapper);
+                messagesContainer.innerHTML = '<div class="loading">No messages found</div>';
+                document.getElementById('conversation-pagination').innerHTML = '';
                 return;
             }
 
@@ -352,29 +398,33 @@
                 (a.timestamp || a.date || 0) - (b.timestamp || b.date || 0)
             );
 
-            const container = document.createElement('div');
-            container.className = 'conversation-messages';
+            messagesContainer.innerHTML = '';
             msgs.forEach(msg => {
                 const el = document.createElement('div');
                 const isFts = msg.source === 'fts';
-                const direction = msg.outgoing ? 'outgoing' : 'incoming';
+                let direction;
+                if (msg.outgoing === true) direction = 'outgoing';
+                else if (msg.outgoing === false) direction = 'incoming';
+                else direction = 'unknown';
                 el.className = 'conv-message ' + direction + (isFts ? ' fts-message' : '');
                 const time = document.createElement('span');
                 time.className = 'msg-time';
                 const ts = msg.timestamp || msg.date || 0;
-                time.textContent = (ts ? formatTimestamp(ts) : 'cached') + (msg.outgoing ? ' (you)' : '');
+                let label = ts ? formatTimestamp(ts) : 'cached';
+                if (msg.outgoing === true) label += ' · you';
+                else if (msg.outgoing === false) label += ' · them';
+                else label += ' · direction unknown';
+                time.textContent = label;
+                el.appendChild(time);
+
                 const text = document.createElement('div');
                 text.className = 'msg-text';
                 const msgText = msg.text || msg.message || msg.content || '';
                 if (msgText) {
                     text.textContent = msgText;
-                    el.appendChild(time);
                     el.appendChild(text);
-                } else {
-                    el.appendChild(time);
                 }
 
-                // Render media (images/videos)
                 if (msg.media && msg.media.length > 0) {
                     const account = msg._account || msg._database || '';
                     msg.media.forEach(m => {
@@ -394,17 +444,14 @@
                             if (m.width && m.height) {
                                 img.width = Math.min(m.width, 400);
                             }
-                            img.onclick = () => window.open(url, '_blank');
+                            img.onclick = () => openLightbox(url, m.filename, account);
                             el.appendChild(img);
                         }
                     });
                 }
 
-                container.appendChild(el);
+                messagesContainer.appendChild(el);
             });
-
-            wrapper.appendChild(container);
-            panel.appendChild(wrapper);
 
             updatePagination(data, 'conversation-pagination', loadConversation);
         }
@@ -412,10 +459,23 @@
         function closeConversation() {
             selectedChatId = null;
             selectedChatName = null;
-            document.getElementById('conversation-panel').innerHTML = '';
+            document.getElementById('conversation-modal').classList.remove('open');
+            document.body.style.overflow = '';
+            document.getElementById('conversation-messages').innerHTML = '';
             document.getElementById('conversation-pagination').innerHTML = '';
             loadChats();
         }
+
+        // Close modal on Escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                if (document.getElementById('lightbox').classList.contains('open')) {
+                    closeLightbox();
+                } else if (document.getElementById('conversation-modal').classList.contains('open')) {
+                    closeConversation();
+                }
+            }
+        });
 
         async function loadUsers(page = 1) {
             const search = document.getElementById('user-search').value;
@@ -472,10 +532,10 @@
         }
 
         function showUserChats(userId, userName) {
-            // Switch to chats tab and filter by user
+            const chatsBtn = document.querySelector('.tab-button[data-tab="chats"]');
             document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
             document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
-            document.querySelectorAll('.tab-button')[1].classList.add('active');
+            chatsBtn.classList.add('active');
             document.getElementById('chats-tab').classList.add('active');
 
             document.getElementById('chat-search').value = userName;
@@ -483,20 +543,215 @@
             loadChats();
         }
 
+        function renderMediaFilters(counts) {
+            const bar = document.getElementById('media-filters');
+            bar.innerHTML = '';
+            const filters = [
+                { key: '', label: 'All', count: counts.all || 0 },
+                { key: 'photo', label: 'Photos', count: counts.photo || 0 },
+                { key: 'video', label: 'Videos', count: counts.video || 0 },
+                { key: 'audio', label: 'Audio', count: counts.audio || 0 },
+                { key: 'sticker', label: 'Stickers', count: counts.sticker || 0 },
+                { key: 'gif', label: 'GIFs', count: counts.gif || 0 },
+                { key: 'document', label: 'Documents', count: counts.document || 0 },
+            ];
+            filters.forEach(f => {
+                if (f.count === 0 && f.key !== '') return;
+                const btn = document.createElement('button');
+                btn.className = 'filter-btn' + (mediaTypeFilter === f.key ? ' active' : '');
+                btn.innerHTML = f.label + ' <span class="badge">' + f.count.toLocaleString() + '</span>';
+                btn.onclick = () => { mediaTypeFilter = f.key; loadMedia(1); };
+                bar.appendChild(btn);
+            });
+        }
+
+        async function loadMedia(page = 1) {
+            const search = document.getElementById('media-search').value;
+            const params = new URLSearchParams({ page, per_page: 60 });
+            if (search) params.append('search', search);
+            if (mediaTypeFilter) params.append('type', mediaTypeFilter);
+
+            const grid = document.getElementById('media-grid');
+            grid.innerHTML = '<div class="loading">Loading media...</div>';
+
+            const data = await fetchAPI(`media?${params}`);
+            if (!data) {
+                grid.innerHTML = '<div class="error">Failed to load media</div>';
+                return;
+            }
+
+            renderMediaFilters(data.counts || {});
+
+            if (!data.media || data.media.length === 0) {
+                grid.innerHTML = '<div class="loading">No media found' + (search ? ' matching "' + search + '"' : '') + '</div>';
+                document.getElementById('media-pagination').innerHTML = '';
+                return;
+            }
+
+            grid.innerHTML = '';
+            data.media.forEach(item => {
+                const el = document.createElement('div');
+                el.className = 'media-item';
+
+                const account = item.account || '';
+                const url = '/api/media/' + account + '/' + item.filename;
+                const isImage = item.media_type === 'photo' || item.media_type === 'gif' || item.media_type === 'sticker';
+                const isVideo = item.media_type === 'video';
+
+                if (isImage) {
+                    const img = document.createElement('img');
+                    const thumb = item.thumbnail ? '/api/media/' + account + '/' + item.thumbnail : url;
+                    img.src = thumb;
+                    img.loading = 'lazy';
+                    img.onerror = () => {
+                        img.remove();
+                        const ph = renderMediaPlaceholder(item);
+                        el.insertBefore(ph, el.firstChild);
+                    };
+                    el.appendChild(img);
+                } else if (isVideo) {
+                    // First-frame thumbnail via <video preload=metadata>. Seek a bit
+                    // past 0 to skip the common black opening frame.
+                    const vid = document.createElement('video');
+                    vid.src = url;
+                    vid.preload = 'metadata';
+                    vid.muted = true;
+                    vid.playsInline = true;
+                    vid.addEventListener('loadedmetadata', () => {
+                        const seek = Math.min(1, (vid.duration || 0) / 4);
+                        if (seek > 0) {
+                            try { vid.currentTime = seek; } catch (_) {}
+                        }
+                    }, { once: true });
+                    vid.addEventListener('error', () => {
+                        vid.remove();
+                        const ph = renderMediaPlaceholder(item);
+                        el.insertBefore(ph, el.firstChild);
+                    }, { once: true });
+                    el.appendChild(vid);
+
+                    const overlay = document.createElement('div');
+                    overlay.className = 'play-overlay';
+                    el.appendChild(overlay);
+                } else {
+                    el.appendChild(renderMediaPlaceholder(item));
+                }
+
+                const badge = document.createElement('span');
+                badge.className = 'media-type-badge';
+                badge.textContent = item.media_type || 'file';
+                el.appendChild(badge);
+
+                const linked = item.linked_message;
+                if (linked && linked.peer_name) {
+                    const meta = document.createElement('div');
+                    meta.className = 'media-meta';
+                    meta.textContent = linked.peer_name;
+                    el.appendChild(meta);
+                }
+
+                el.onclick = () => openLightbox(url, item.filename, account, item);
+                grid.appendChild(el);
+            });
+
+            updatePagination(data, 'media-pagination', loadMedia);
+        }
+
+        function renderMediaPlaceholder(item) {
+            const ph = document.createElement('div');
+            ph.className = 'media-placeholder';
+            const icon = document.createElement('div');
+            icon.className = 'icon';
+            const icons = { video: '🎬', audio: '🎵', document: '📄', sticker: '🌟', gif: '🎞', photo: '🖼' };
+            icon.textContent = icons[item.media_type] || '📎';
+            const name = document.createElement('div');
+            const sz = item.size_bytes ? ' · ' + formatBytes(item.size_bytes) : '';
+            name.textContent = (item.mime_type || 'file').split('/').pop() + sz;
+            ph.appendChild(icon);
+            ph.appendChild(name);
+            return ph;
+        }
+
+        function formatBytes(n) {
+            if (n < 1024) return n + ' B';
+            if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+            if (n < 1024 * 1024 * 1024) return (n / 1024 / 1024).toFixed(1) + ' MB';
+            return (n / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+        }
+
+        function searchMedia() {
+            clearTimeout(mediaSearchTimeout);
+            mediaSearchTimeout = setTimeout(() => loadMedia(1), 300);
+        }
+
+        function openLightbox(url, filename, account, item) {
+            const lb = document.getElementById('lightbox');
+            const content = document.getElementById('lightbox-content');
+            const info = document.getElementById('lightbox-info');
+            content.innerHTML = '';
+
+            const fname = (filename || '').toLowerCase();
+            const mime = (item && item.mime_type) || '';
+            const isVideo = mime.startsWith('video/') || fname.endsWith('.mp4') || fname.endsWith('.webm');
+            const isAudio = mime.startsWith('audio/');
+            const isImage = mime.startsWith('image/') || /(photo-size|sticker)/.test(fname);
+
+            if (isVideo) {
+                const v = document.createElement('video');
+                v.src = url; v.controls = true; v.autoplay = true;
+                content.appendChild(v);
+            } else if (isAudio) {
+                const a = document.createElement('audio');
+                a.src = url; a.controls = true; a.autoplay = true;
+                content.appendChild(a);
+            } else if (isImage || !item) {
+                const img = document.createElement('img');
+                img.src = url;
+                content.appendChild(img);
+            } else {
+                const link = document.createElement('a');
+                link.href = url; link.target = '_blank';
+                link.style.color = 'white'; link.style.fontSize = '1.5em';
+                link.textContent = '⬇️ Download ' + filename;
+                content.appendChild(link);
+            }
+
+            const linked = item && item.linked_message;
+            const parts = [filename];
+            if (item && item.size_bytes) parts.push(formatBytes(item.size_bytes));
+            if (linked && linked.peer_name) parts.push('From: ' + linked.peer_name);
+            if (linked && linked.timestamp) parts.push(formatTimestamp(linked.timestamp));
+            parts.push('<a href="' + url + '" target="_blank">Open original</a>');
+            info.innerHTML = parts.join(' · ');
+
+            lb.classList.add('open');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeLightbox() {
+            const lb = document.getElementById('lightbox');
+            lb.classList.remove('open');
+            document.getElementById('lightbox-content').innerHTML = '';
+            // Don't unlock body if conversation modal is also open
+            if (!document.getElementById('conversation-modal').classList.contains('open')) {
+                document.body.style.overflow = '';
+            }
+        }
+
         async function loadDatabases() {
             const databases = await fetchAPI('databases');
             const dbList = document.getElementById('database-list');
-            
+
             if (!databases) {
                 dbList.innerHTML = '<div class="error">Failed to load databases</div>';
                 return;
             }
-            
+
             if (databases.length === 0) {
                 dbList.innerHTML = '<div class="loading">No databases found</div>';
                 return;
             }
-            
+
             dbList.innerHTML = databases.map(db => `
                 <div class="database-item ${db.decrypted ? 'decrypted' : 'encrypted'}">
                     <h4>${db.name}</h4>
@@ -507,19 +762,17 @@
             `).join('');
         }
 
-        function showTab(tabName) {
-            // Update tab buttons
-            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
-            
-            // Update tab content
+        function showTab(tabName, btn) {
+            document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+            (btn || document.querySelector('.tab-button[data-tab="' + tabName + '"]')).classList.add('active');
+
             document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
             document.getElementById(tabName + '-tab').classList.add('active');
-            
-            // Load tab content
+
             switch(tabName) {
                 case 'messages': loadMessages(); break;
                 case 'chats': loadChats(); break;
+                case 'media': loadMedia(); break;
                 case 'users': loadUsers(); break;
                 case 'databases': loadDatabases(); break;
             }
@@ -540,17 +793,20 @@
         }
 
         function formatMessageContent(msg) {
-            // Extract meaningful content from message object
             const textFields = ['text', 'message', 'content', 'body'];
             for (let field of textFields) {
                 if (msg[field]) {
-                    return `<strong>${field}:</strong> ${msg[field]}`;
+                    return `<strong>${field}:</strong> ${escapeHtml(msg[field])}`;
                 }
             }
-            
-            // Show first few key-value pairs
             const keys = Object.keys(msg).filter(k => !k.startsWith('_')).slice(0, 5);
-            return keys.map(key => `<strong>${key}:</strong> ${msg[key]}`).join('<br>');
+            return keys.map(key => `<strong>${key}:</strong> ${escapeHtml(String(msg[key]))}`).join('<br>');
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
         }
 
         function updatePagination(data, elementId, loadFunc) {
@@ -559,12 +815,12 @@
                 pagination.innerHTML = '';
                 return;
             }
-            
+
             let buttons = [];
             for (let i = 1; i <= data.total_pages; i++) {
                 if (i === 1 || i === data.total_pages || Math.abs(i - data.page) <= 2) {
                     buttons.push(`
-                        <button class="${i === data.page ? 'active' : ''}" 
+                        <button class="${i === data.page ? 'active' : ''}"
                                 onclick="${loadFunc.name}(${i})">
                             ${i}
                         </button>
@@ -573,11 +829,10 @@
                     buttons.push('<span>...</span>');
                 }
             }
-            
+
             pagination.innerHTML = buttons.join('');
         }
 
-        // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             loadStats();
             loadMessages();

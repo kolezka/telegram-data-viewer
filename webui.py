@@ -51,16 +51,25 @@ def load_parsed_data(data_dir: Path) -> dict:
             with open(fts_file) as f:
                 messages_fts = json.load(f)
 
+        media_catalog = []
+        catalog_file = account_dir / "media_catalog.json"
+        if catalog_file.exists():
+            with open(catalog_file) as f:
+                media_catalog = json.load(f)
+
         databases[account_id] = {
             'decrypted': True,
             'messages': messages,
             'messages_fts': messages_fts,
             'peers': peers,
             'conversations': conversations,
+            'media_catalog': media_catalog,
             'schema': {'tables': ['t2 (peers)', 't7 (messages)']},
         }
 
-        print(f"  {account_id}: {len(messages)} messages, {len(peers)} peers, {len(conversations)} conversations, {len(messages_fts)} fts")
+        print(f"  {account_id}: {len(messages)} messages, {len(peers)} peers, "
+              f"{len(conversations)} conversations, {len(messages_fts)} fts, "
+              f"{len(media_catalog)} media")
 
     return {'databases': databases}
 
@@ -69,6 +78,16 @@ def load_telegram_data(data_dir: str):
     """Load exported Telegram data from directory"""
     global telegram_data, export_dir, backup_dir
     export_dir = Path(data_dir)
+
+    # Auto-descend: if pointed at a backup root that contains a parsed_data/
+    # subdirectory, use that instead. This lets the user pass either
+    # `./tg_<timestamp>/` or `./tg_<timestamp>/parsed_data/` interchangeably.
+    nested = export_dir / "parsed_data"
+    if nested.is_dir() and (
+        (nested / "summary.json").exists() or any(nested.glob("account-*/messages.json"))
+    ):
+        print(f"Auto-detected parsed_data subdirectory: {nested}")
+        export_dir = nested
 
     # Derive backup_dir (parent of parsed_data)
     backup_dir = export_dir.parent
@@ -104,6 +123,11 @@ def load_telegram_data(data_dir: str):
     db_count = len(telegram_data.get('databases', {}))
     msg_count = sum(len(db.get('messages', [])) for db in telegram_data.get('databases', {}).values())
     print(f"Loaded {db_count} databases with {msg_count} total messages")
+    if db_count > 0 and msg_count == 0:
+        print()
+        print("WARNING: account-* directories were found but contain no messages.json.")
+        print(f"  This usually means '{export_dir}' is a raw backup root, not parsed_data.")
+        print(f"  Try: python3 postbox_parser.py '{export_dir}'  (then re-run this command)")
 
 MIME_SIGNATURES = [
     (b'\xff\xd8\xff', 'image/jpeg'),
@@ -291,6 +315,10 @@ def get_messages():
         db_data = telegram_data.get('databases', {}).get(db, {})
         messages = db_data.get('messages', [])
 
+        # Track t7 messages by (peer_id, text) so we can dedupe FTS entries
+        # that are just cached copies of the live message.
+        t7_keys: set = set()
+
         for msg in messages:
             # Filter by peer_id(s)
             if peer_id_set and str(msg.get('peer_id', '')) not in peer_id_set:
@@ -300,6 +328,10 @@ def get_messages():
             msg['_database'] = db
             msg['_account'] = db
 
+            text = msg.get('text', '')
+            if text:
+                t7_keys.add((str(msg.get('peer_id', '')), text))
+
             # Simple search filtering
             if search:
                 msg_text = str(msg).lower()
@@ -308,7 +340,7 @@ def get_messages():
 
             all_messages.append(msg)
 
-        # Include FTS (cached/deleted) messages
+        # Include FTS (cached/deleted) messages — skip entries already present in t7.
         fts_peer_refs = {f'p{pid}' for pid in peer_id_set} if peer_id_set else set()
         for fts_msg in db_data.get('messages_fts', []):
             ref = str(fts_msg.get('peer_ref', ''))
@@ -316,17 +348,25 @@ def get_messages():
                 continue
 
             fts_text = fts_msg.get('text', '')
+            peer_str = ref.lstrip('p')
+
+            # Dedup: same (peer, text) already shipped from t7.
+            if (peer_str, fts_text) in t7_keys:
+                continue
+
             if search and search not in fts_text.lower():
                 continue
 
             all_messages.append({
                 'text': fts_text,
-                'peer_id': ref.lstrip('p'),
+                'peer_id': peer_str,
                 'source': 'fts',
                 'fts_id': fts_msg.get('fts_id'),
                 'msg_ref': fts_msg.get('msg_ref', ''),
                 'timestamp': 0,
-                'outgoing': False,
+                # Direction unknown for cached/deleted FTS entries — UI renders
+                # these in a neutral style instead of forcing "incoming".
+                'outgoing': None,
                 '_database': db,
                 '_account': db,
             })
@@ -471,6 +511,62 @@ def get_chats():
 
     return jsonify(sorted_chats)
 
+@app.route('/api/media')
+def get_media():
+    """Get media catalog across all accounts with search + filter + pagination."""
+    search = request.args.get('search', '').lower()
+    media_type = request.args.get('type', '')   # photo, video, audio, document, sticker, gif
+    account_filter = request.args.get('account', '')
+    page = int(request.args.get('page', 1))
+    per_page = int(request.args.get('per_page', 60))
+
+    items = []
+    for db_name, db_data in telegram_data.get('databases', {}).items():
+        if account_filter and db_name != account_filter:
+            continue
+        for entry in db_data.get('media_catalog', []):
+            if media_type and entry.get('media_type') != media_type:
+                continue
+            if search:
+                hay_parts = [
+                    entry.get('filename', ''),
+                    entry.get('mime_type', ''),
+                    entry.get('media_type', ''),
+                ]
+                linked = entry.get('linked_message') or {}
+                hay_parts.append(linked.get('peer_name') or '')
+                if search not in ' '.join(hay_parts).lower():
+                    continue
+            items.append({**entry, 'account': db_name})
+
+    # Sort newest first when timestamp available, otherwise by filename.
+    def _sort_key(e):
+        linked = e.get('linked_message') or {}
+        return -(linked.get('timestamp') or 0)
+    items.sort(key=_sort_key)
+
+    # Per-type counts (always over the full unfiltered set, for filter-bar badges).
+    counts = {'all': 0}
+    for db_data in telegram_data.get('databases', {}).values():
+        for entry in db_data.get('media_catalog', []):
+            counts['all'] += 1
+            mt = entry.get('media_type') or 'document'
+            counts[mt] = counts.get(mt, 0) + 1
+
+    total = len(items)
+    start = (page - 1) * per_page
+    end = start + per_page
+
+    return jsonify({
+        'media': items[start:end],
+        'total': total,
+        'page': page,
+        'per_page': per_page,
+        'total_pages': (total + per_page - 1) // per_page,
+        'counts': counts,
+    })
+
+
 @app.route('/api/export-data')
 def get_export_data():
     """Get all export data for the viewer"""
@@ -538,603 +634,6 @@ def datetime_filter(timestamp):
     except:
         return str(timestamp)
 
-def create_templates():
-    """Create HTML templates"""
-    templates_dir = Path(__file__).parent / "templates"
-    templates_dir.mkdir(exist_ok=True)
-    
-    # Main template
-    index_html = '''<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Telegram Data Viewer</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; background: #f5f5f5; }
-        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
-        .header { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .header h1 { color: #333; margin-bottom: 10px; }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
-        .stat-card { background: white; padding: 20px; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .stat-number { font-size: 2em; font-weight: bold; color: #0088cc; }
-        .stat-label { color: #666; margin-top: 5px; }
-        .tabs { background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .tab-buttons { display: flex; background: #f8f9fa; }
-        .tab-button { flex: 1; padding: 15px; border: none; background: transparent; cursor: pointer; border-bottom: 3px solid transparent; }
-        .tab-button.active { background: white; border-bottom-color: #0088cc; }
-        .tab-content { padding: 20px; }
-        .tab-pane { display: none; }
-        .tab-pane.active { display: block; }
-        .message-list { max-height: 600px; overflow-y: auto; }
-        .message { border-bottom: 1px solid #eee; padding: 15px; }
-        .message:hover { background: #f8f9fa; }
-        .message-meta { color: #666; font-size: 0.9em; margin-bottom: 5px; }
-        .message-content { margin: 10px 0; }
-        .search-box { width: 100%; padding: 10px; margin-bottom: 20px; border: 1px solid #ddd; border-radius: 4px; }
-        .pagination { text-align: center; margin-top: 20px; }
-        .pagination button { margin: 0 5px; padding: 8px 12px; border: 1px solid #ddd; background: white; cursor: pointer; }
-        .pagination button.active { background: #0088cc; color: white; }
-        .loading { text-align: center; padding: 40px; color: #666; }
-        .database-list { display: grid; gap: 10px; }
-        .database-item { padding: 15px; border: 1px solid #ddd; border-radius: 4px; background: white; }
-        .database-item.decrypted { border-color: #28a745; }
-        .database-item.encrypted { border-color: #dc3545; }
-        .chat-list { display: grid; gap: 10px; }
-        .chat-item { padding: 15px; border: 1px solid #ddd; border-radius: 4px; background: white; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
-        .chat-item:hover { border-color: #0088cc; background: #f0f8ff; }
-        .chat-item.selected { border-color: #0088cc; border-width: 2px; background: #e8f4fd; }
-        .chat-info h4 { margin-bottom: 5px; }
-        .chat-info small { color: #666; }
-        .chat-stats { text-align: right; flex-shrink: 0; }
-        .filter-bar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
-        .filter-btn { padding: 6px 14px; border: 1px solid #ddd; border-radius: 16px; background: white; cursor: pointer; font-size: 0.9em; transition: all 0.15s; }
-        .filter-btn:hover { border-color: #0088cc; color: #0088cc; }
-        .filter-btn.active { background: #0088cc; color: white; border-color: #0088cc; }
-        .filter-btn .badge { display: inline-block; background: rgba(0,0,0,0.1); padding: 1px 6px; border-radius: 10px; font-size: 0.85em; margin-left: 4px; }
-        .filter-btn.active .badge { background: rgba(255,255,255,0.3); }
-        .user-list { display: grid; gap: 8px; }
-        .user-item { padding: 12px 15px; border: 1px solid #ddd; border-radius: 4px; background: white; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
-        .user-item:hover { border-color: #0088cc; background: #f0f8ff; }
-        .user-name { font-weight: 600; }
-        .user-details { color: #666; font-size: 0.9em; }
-        .chat-type-tag { display: inline-block; font-size: 0.75em; padding: 2px 7px; border-radius: 10px; margin-left: 6px; vertical-align: middle; }
-        .chat-type-tag.secret { background: #ffe0e0; color: #c00; }
-        .chat-type-tag.bot { background: #e0e0ff; color: #44c; }
-        .chat-type-tag.channel { background: #e0ffe0; color: #070; }
-        .chat-type-tag.group { background: #fff3e0; color: #a60; }
-        .chat-type-tag.fts { background: #fff0f0; color: #c55; }
-        .conversation-panel { margin-top: 15px; border-top: 2px solid #0088cc; padding-top: 15px; }
-        .conversation-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        .conversation-header h3 { color: #0088cc; }
-        .conversation-header button { padding: 6px 14px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer; }
-        .conversation-header button:hover { background: #f8f9fa; }
-
-        .conv-message { padding: 10px 14px; margin-bottom: 6px; border-radius: 12px; max-width: 80%; }
-        .conv-message.incoming { background: #f0f0f0; align-self: flex-start; border-bottom-left-radius: 2px; }
-        .conv-message.outgoing { background: #dcf8c6; align-self: flex-end; border-bottom-right-radius: 2px; }
-        .conv-message.fts-message { border-left: 3px solid #c55; }
-        .conv-message .msg-time { font-size: 0.8em; color: #888; }
-        .conv-message .msg-text { margin-top: 4px; }
-        .conv-message img { max-width: 100%; border-radius: 8px; margin-top: 6px; cursor: pointer; display: block; }
-        .conv-message video { max-width: 100%; border-radius: 8px; margin-top: 6px; display: block; }
-        .conversation-messages { max-height: 500px; overflow-y: auto; display: flex; flex-direction: column; }
-        .error { color: #dc3545; padding: 20px; text-align: center; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>📱 Telegram Data Viewer</h1>
-            <p>Explore your decrypted Telegram messages, chats, and databases</p>
-        </div>
-
-        <div class="stats-grid" id="stats-grid">
-            <div class="stat-card">
-                <div class="stat-number" id="total-messages">-</div>
-                <div class="stat-label">Total Messages</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" id="total-chats">-</div>
-                <div class="stat-label">Chats</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" id="total-databases">-</div>
-                <div class="stat-label">Databases</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" id="decrypted-databases">-</div>
-                <div class="stat-label">Decrypted</div>
-            </div>
-        </div>
-
-        <div class="tabs">
-            <div class="tab-buttons">
-                <button class="tab-button active" onclick="showTab('messages')">Messages</button>
-                <button class="tab-button" onclick="showTab('chats')">Chats</button>
-                <button class="tab-button" onclick="showTab('users')">Users</button>
-                <button class="tab-button" onclick="showTab('databases')">Databases</button>
-            </div>
-
-            <div class="tab-content">
-                <div class="tab-pane active" id="messages-tab">
-                    <input type="text" class="search-box" id="message-search" placeholder="Search messages..." onkeyup="searchMessages()">
-                    <div class="message-list" id="message-list">
-                        <div class="loading">Loading messages...</div>
-                    </div>
-                    <div class="pagination" id="message-pagination"></div>
-                </div>
-
-                <div class="tab-pane" id="chats-tab">
-                    <input type="text" class="search-box" id="chat-search" placeholder="Search conversations by name or username..." onkeyup="searchChats()">
-                    <div class="filter-bar" id="chat-filters"></div>
-                    <div class="chat-list" id="chat-list">
-                        <div class="loading">Loading chats...</div>
-                    </div>
-                    <div id="conversation-panel"></div>
-                    <div class="pagination" id="conversation-pagination"></div>
-                </div>
-
-                <div class="tab-pane" id="users-tab">
-                    <input type="text" class="search-box" id="user-search" placeholder="Search people by name, username, or phone..." onkeyup="searchUsers()">
-                    <div class="user-list" id="user-list">
-                        <div class="loading">Loading users...</div>
-                    </div>
-                    <div class="pagination" id="user-pagination"></div>
-                </div>
-
-                <div class="tab-pane" id="databases-tab">
-                    <div class="database-list" id="database-list">
-                        <div class="loading">Loading databases...</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        let currentPage = 1;
-        let searchTimeout;
-        let chatSearchTimeout;
-        let userSearchTimeout;
-        let selectedChatId = null;
-        let selectedChatName = null;
-        let chatTypeFilter = '';
-
-        async function fetchAPI(endpoint) {
-            try {
-                const response = await fetch(`/api/${endpoint}`);
-                return await response.json();
-            } catch (error) {
-                console.error('API Error:', error);
-                return null;
-            }
-        }
-
-        async function loadStats() {
-            const stats = await fetchAPI('stats');
-            if (stats) {
-                document.getElementById('total-messages').textContent = stats.total_messages.toLocaleString();
-                document.getElementById('total-chats').textContent = stats.total_chats.toLocaleString();
-                document.getElementById('total-databases').textContent = stats.total_databases;
-                document.getElementById('decrypted-databases').textContent = stats.decrypted_databases;
-            }
-        }
-
-        async function loadMessages(page = 1) {
-            const search = document.getElementById('message-search').value;
-            const params = new URLSearchParams({ page, per_page: 50 });
-            if (search) params.append('search', search);
-            
-            const data = await fetchAPI(`messages?${params}`);
-            const messageList = document.getElementById('message-list');
-            
-            if (!data || !data.messages) {
-                messageList.innerHTML = '<div class="error">Failed to load messages</div>';
-                return;
-            }
-            
-            if (data.messages.length === 0) {
-                messageList.innerHTML = '<div class="loading">No messages found</div>';
-                return;
-            }
-            
-            messageList.innerHTML = data.messages.map(msg => `
-                <div class="message">
-                    <div class="message-meta">
-                        Database: ${msg._database || 'Unknown'} | 
-                        Table: ${msg._table || 'Unknown'} |
-                        Time: ${formatTimestamp(msg.timestamp || msg.date)}
-                    </div>
-                    <div class="message-content">
-                        ${formatMessageContent(msg)}
-                    </div>
-                </div>
-            `).join('');
-            
-            // Update pagination
-            updatePagination(data, 'message-pagination', loadMessages);
-        }
-
-        function escapeHtml(str) {
-            const div = document.createElement('div');
-            div.textContent = str;
-            return div.innerHTML;
-        }
-
-        function renderChatFilters(allChats) {
-            const bar = document.getElementById('chat-filters');
-            bar.innerHTML = '';
-
-            // Count types from unfiltered data (fetch all to count)
-            const filters = [
-                { key: '', label: 'All' },
-                { key: 'secret', label: 'Secret' },
-                { key: 'fts', label: 'Cached/Deleted' },
-                { key: 'user', label: 'Users' },
-                { key: 'channel', label: 'Channels' },
-                { key: 'bot', label: 'Bots' },
-                { key: 'group', label: 'Groups' },
-            ];
-
-            filters.forEach(f => {
-                const btn = document.createElement('button');
-                btn.className = 'filter-btn' + (chatTypeFilter === f.key ? ' active' : '');
-                btn.textContent = f.label;
-                btn.onclick = () => { chatTypeFilter = f.key; loadChats(); };
-                bar.appendChild(btn);
-            });
-        }
-
-        async function loadChats(fromUser) {
-            const search = document.getElementById('chat-search').value;
-            const params = new URLSearchParams();
-            if (search) params.append('search', search);
-            if (chatTypeFilter) params.append('type', chatTypeFilter);
-            if (fromUser) params.append('user_id', fromUser);
-
-            const chats = await fetchAPI(`chats?${params}`);
-            const chatList = document.getElementById('chat-list');
-
-            renderChatFilters(chats || []);
-
-            if (!chats) {
-                chatList.textContent = 'Failed to load chats';
-                return;
-            }
-
-            if (chats.length === 0) {
-                chatList.textContent = search ? 'No conversations matching "' + search + '"' : 'No conversations found';
-                return;
-            }
-
-            chatList.innerHTML = '';
-            chats.forEach(chat => {
-                const item = document.createElement('div');
-                item.className = 'chat-item' + (selectedChatId && selectedChatId.split(',').includes(chat.id) ? ' selected' : '');
-                item.onclick = () => openConversation(chat.all_peer_ids || [chat.id], chat.name);
-
-                const info = document.createElement('div');
-                info.className = 'chat-info';
-                const h4 = document.createElement('h4');
-                h4.textContent = chat.name;
-
-                // Type tag
-                if (chat.type && chat.type !== 'other') {
-                    const tag = document.createElement('span');
-                    tag.className = 'chat-type-tag ' + chat.type;
-                    tag.textContent = chat.type;
-                    h4.appendChild(tag);
-                }
-                if (chat.has_fts) {
-                    const ftsTag = document.createElement('span');
-                    ftsTag.className = 'chat-type-tag fts';
-                    ftsTag.textContent = 'cached';
-                    h4.appendChild(ftsTag);
-                }
-
-                const small = document.createElement('small');
-                small.textContent = (chat.username ? '@' + chat.username + ' | ' : '') + chat.message_count.toLocaleString() + ' messages';
-                info.appendChild(h4);
-                info.appendChild(small);
-
-                const stats = document.createElement('div');
-                stats.className = 'chat-stats';
-                const timeSmall = document.createElement('small');
-                timeSmall.textContent = formatTimestamp(chat.last_message);
-                stats.appendChild(timeSmall);
-
-                item.appendChild(info);
-                item.appendChild(stats);
-                chatList.appendChild(item);
-            });
-        }
-
-        function searchChats() {
-            clearTimeout(chatSearchTimeout);
-            chatSearchTimeout = setTimeout(() => loadChats(), 300);
-        }
-
-        async function openConversation(peerIds, peerName) {
-            selectedChatId = Array.isArray(peerIds) ? peerIds.join(',') : peerIds;
-            selectedChatName = peerName;
-            await loadChats();
-            loadConversation(1);
-        }
-
-        async function loadConversation(page = 1) {
-            const panel = document.getElementById('conversation-panel');
-            if (!selectedChatId) { panel.textContent = ''; return; }
-
-            const params = new URLSearchParams({ peer_id: selectedChatId, page, per_page: 50 });
-            const data = await fetchAPI(`messages?${params}`);
-
-            panel.innerHTML = '';
-            const wrapper = document.createElement('div');
-            wrapper.className = 'conversation-panel';
-
-            const header = document.createElement('div');
-            header.className = 'conversation-header';
-            const title = document.createElement('h3');
-            title.textContent = selectedChatName + ' (' + (data ? data.total.toLocaleString() : '0') + ' messages)';
-            const closeBtn = document.createElement('button');
-            closeBtn.textContent = 'Close';
-            closeBtn.onclick = closeConversation;
-            header.appendChild(title);
-            header.appendChild(closeBtn);
-            wrapper.appendChild(header);
-
-            if (!data || !data.messages || data.messages.length === 0) {
-                const empty = document.createElement('div');
-                empty.className = 'loading';
-                empty.textContent = 'No messages found';
-                wrapper.appendChild(empty);
-                panel.appendChild(wrapper);
-                return;
-            }
-
-            const msgs = [...data.messages].sort((a, b) =>
-                (a.timestamp || a.date || 0) - (b.timestamp || b.date || 0)
-            );
-
-            const container = document.createElement('div');
-            container.className = 'conversation-messages';
-            msgs.forEach(msg => {
-                const el = document.createElement('div');
-                const isFts = msg.source === 'fts';
-                const direction = msg.outgoing ? 'outgoing' : 'incoming';
-                el.className = 'conv-message ' + direction + (isFts ? ' fts-message' : '');
-                const time = document.createElement('span');
-                time.className = 'msg-time';
-                const ts = msg.timestamp || msg.date || 0;
-                time.textContent = (ts ? formatTimestamp(ts) : 'cached') + (msg.outgoing ? ' (you)' : '');
-                const text = document.createElement('div');
-                text.className = 'msg-text';
-                const msgText = msg.text || msg.message || msg.content || '';
-                if (msgText) {
-                    text.textContent = msgText;
-                    el.appendChild(time);
-                    el.appendChild(text);
-                } else {
-                    el.appendChild(time);
-                }
-
-                // Render media (images/videos)
-                if (msg.media && msg.media.length > 0) {
-                    const account = msg._account || msg._database || '';
-                    msg.media.forEach(m => {
-                        if (!m.filename) return;
-                        const url = '/api/media/' + account + '/' + m.filename;
-                        const fname = m.filename.toLowerCase();
-                        if (fname.includes('document') && fname.endsWith('.mp4')) {
-                            const vid = document.createElement('video');
-                            vid.src = url;
-                            vid.controls = true;
-                            vid.preload = 'none';
-                            el.appendChild(vid);
-                        } else {
-                            const img = document.createElement('img');
-                            img.src = url;
-                            img.loading = 'lazy';
-                            if (m.width && m.height) {
-                                img.width = Math.min(m.width, 400);
-                            }
-                            img.onclick = () => window.open(url, '_blank');
-                            el.appendChild(img);
-                        }
-                    });
-                }
-
-                container.appendChild(el);
-            });
-
-            wrapper.appendChild(container);
-            panel.appendChild(wrapper);
-
-            updatePagination(data, 'conversation-pagination', loadConversation);
-        }
-
-        function closeConversation() {
-            selectedChatId = null;
-            selectedChatName = null;
-            document.getElementById('conversation-panel').innerHTML = '';
-            document.getElementById('conversation-pagination').innerHTML = '';
-            loadChats();
-        }
-
-        async function loadUsers(page = 1) {
-            const search = document.getElementById('user-search').value;
-            const params = new URLSearchParams({ page, per_page: 100 });
-            if (search) params.append('search', search);
-
-            const data = await fetchAPI(`users?${params}`);
-            const userList = document.getElementById('user-list');
-
-            if (!data || !data.users) {
-                userList.textContent = 'Failed to load users';
-                return;
-            }
-
-            if (data.users.length === 0) {
-                userList.textContent = search ? 'No users matching "' + search + '"' : 'No users found';
-                return;
-            }
-
-            userList.innerHTML = '';
-            data.users.forEach(user => {
-                const item = document.createElement('div');
-                item.className = 'user-item';
-                item.onclick = () => showUserChats(user.id, user.name);
-
-                const left = document.createElement('div');
-                const nameEl = document.createElement('span');
-                nameEl.className = 'user-name';
-                nameEl.textContent = user.name;
-                left.appendChild(nameEl);
-
-                if (user.username) {
-                    const un = document.createElement('span');
-                    un.className = 'user-details';
-                    un.textContent = '  @' + user.username;
-                    left.appendChild(un);
-                }
-
-                const right = document.createElement('div');
-                right.className = 'user-details';
-                right.textContent = user.phone || '';
-
-                item.appendChild(left);
-                item.appendChild(right);
-                userList.appendChild(item);
-            });
-
-            updatePagination(data, 'user-pagination', loadUsers);
-        }
-
-        function searchUsers() {
-            clearTimeout(userSearchTimeout);
-            userSearchTimeout = setTimeout(() => loadUsers(1), 300);
-        }
-
-        function showUserChats(userId, userName) {
-            // Switch to chats tab and filter by user
-            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-            document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
-            document.querySelectorAll('.tab-button')[1].classList.add('active');
-            document.getElementById('chats-tab').classList.add('active');
-
-            document.getElementById('chat-search').value = userName;
-            chatTypeFilter = '';
-            loadChats();
-        }
-
-        async function loadDatabases() {
-            const databases = await fetchAPI('databases');
-            const dbList = document.getElementById('database-list');
-            
-            if (!databases) {
-                dbList.innerHTML = '<div class="error">Failed to load databases</div>';
-                return;
-            }
-            
-            if (databases.length === 0) {
-                dbList.innerHTML = '<div class="loading">No databases found</div>';
-                return;
-            }
-            
-            dbList.innerHTML = databases.map(db => `
-                <div class="database-item ${db.decrypted ? 'decrypted' : 'encrypted'}">
-                    <h4>${db.name}</h4>
-                    <p>Status: ${db.decrypted ? '✅ Decrypted' : '❌ Encrypted'}</p>
-                    <p>Messages: ${db.message_count.toLocaleString()}</p>
-                    <p>Tables: ${db.tables.join(', ')}</p>
-                </div>
-            `).join('');
-        }
-
-        function showTab(tabName) {
-            // Update tab buttons
-            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
-            
-            // Update tab content
-            document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
-            document.getElementById(tabName + '-tab').classList.add('active');
-            
-            // Load tab content
-            switch(tabName) {
-                case 'messages': loadMessages(); break;
-                case 'chats': loadChats(); break;
-                case 'users': loadUsers(); break;
-                case 'databases': loadDatabases(); break;
-            }
-        }
-
-        function searchMessages() {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(() => loadMessages(1), 500);
-        }
-
-        function formatTimestamp(timestamp) {
-            if (!timestamp) return 'Unknown';
-            try {
-                return new Date(timestamp * 1000).toLocaleString();
-            } catch {
-                return timestamp;
-            }
-        }
-
-        function formatMessageContent(msg) {
-            // Extract meaningful content from message object
-            const textFields = ['text', 'message', 'content', 'body'];
-            for (let field of textFields) {
-                if (msg[field]) {
-                    return `<strong>${field}:</strong> ${msg[field]}`;
-                }
-            }
-            
-            // Show first few key-value pairs
-            const keys = Object.keys(msg).filter(k => !k.startsWith('_')).slice(0, 5);
-            return keys.map(key => `<strong>${key}:</strong> ${msg[key]}`).join('<br>');
-        }
-
-        function updatePagination(data, elementId, loadFunc) {
-            const pagination = document.getElementById(elementId);
-            if (data.total_pages <= 1) {
-                pagination.innerHTML = '';
-                return;
-            }
-            
-            let buttons = [];
-            for (let i = 1; i <= data.total_pages; i++) {
-                if (i === 1 || i === data.total_pages || Math.abs(i - data.page) <= 2) {
-                    buttons.push(`
-                        <button class="${i === data.page ? 'active' : ''}" 
-                                onclick="${loadFunc.name}(${i})">
-                            ${i}
-                        </button>
-                    `);
-                } else if (buttons[buttons.length - 1] !== '...') {
-                    buttons.push('<span>...</span>');
-                }
-            }
-            
-            pagination.innerHTML = buttons.join('');
-        }
-
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            loadStats();
-            loadMessages();
-        });
-    </script>
-</body>
-</html>'''
-    
-    with open(templates_dir / "index.html", "w") as f:
-        f.write(index_html)
-
 def main():
     parser = argparse.ArgumentParser(description='Start Telegram Data Web UI')
     parser.add_argument('data_dir', help='Directory containing decrypted data')
@@ -1147,10 +646,7 @@ def main():
     if not Path(args.data_dir).exists():
         print(f"ERROR: Data directory not found: {args.data_dir}")
         sys.exit(1)
-    
-    # Create templates
-    create_templates()
-    
+
     # Load data
     load_telegram_data(args.data_dir)
     

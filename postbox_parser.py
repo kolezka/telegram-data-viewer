@@ -148,12 +148,47 @@ MIME_SIGNATURES = [
 
 
 def detect_mime_type(filepath: Path) -> str:
-    """Detect MIME type from file magic bytes."""
+    """Detect MIME type from file magic bytes.
+
+    Telegram caches a lot of media without explicit filename suffixes —
+    Lottie stickers go in as gzip(JSON) with no `.tgs` extension, SVG
+    icons go in as gzip(XML), macOS app icons as `icns`. We peek inside
+    these wrappers so the catalog doesn't misclassify them as documents.
+    """
     try:
         with open(filepath, 'rb') as f:
             header = f.read(12)
     except OSError:
         return 'application/octet-stream'
+
+    # Gzip wrapper: decompress a slice to identify the real format.
+    if header[:2] == b'\x1f\x8b':
+        try:
+            import gzip
+            with gzip.open(filepath, 'rb') as gh:
+                inner = gh.read(256)
+            stripped = inner.lstrip()
+            # Lottie / TGS animated stickers — JSON object with the
+            # frame-rate / in-point / out-point triple, often (but not
+            # always) tagged with "tgs":.
+            if (b'"tgs":' in inner) or (
+                stripped[:1] == b'{'
+                and b'"fr":' in inner
+                and b'"ip":' in inner
+                and b'"op":' in inner
+            ):
+                return 'application/x-tgsticker'
+            # SVG (Telegram caches sticker pack thumbnails as gzipped SVG)
+            if b'<svg' in inner or stripped[:5] == b'<?xml':
+                return 'image/svg+xml'
+        except Exception:
+            pass
+        return 'application/gzip'
+
+    # macOS icon resource (.icns): app/sticker pack icons cached by Telegram.
+    # The IconUtilities embed PNGs inside; treat the whole file as image.
+    if header[:4] == b'icns':
+        return 'image/icns'
 
     for sig, mime in MIME_SIGNATURES:
         if header.startswith(sig):
@@ -175,11 +210,18 @@ def detect_mime_type(filepath: Path) -> str:
 
 def classify_media_type(mime: str, filename: str) -> str:
     """Classify a file into a media type category."""
-    if '-tgs' in filename or filename.endswith('.tgs'):
+    if mime == 'application/x-tgsticker' or '-tgs' in filename or filename.endswith('.tgs'):
         return 'sticker'
     if mime.startswith('image/gif'):
         return 'gif'
     if mime.startswith('image/'):
+        # WebP files cached by Telegram are almost always static stickers
+        # (real photos are stored as JPEG via the photo-size pipeline).
+        # SVG and icns files are sticker-pack/app-icon assets, not user photos.
+        if mime == 'image/webp' and 'photo-size' not in filename:
+            return 'sticker'
+        if mime in ('image/svg+xml', 'image/icns'):
+            return 'sticker'
         return 'photo'
     if mime.startswith('video/'):
         return 'video'
@@ -229,22 +271,58 @@ def extract_text_from_message(value: bytes) -> Optional[str]:
 
 
 def extract_media_refs(value: bytes) -> List[Dict[str, Any]]:
-    """Extract media file references from a t7 message value.
+    """Extract media file references from a serialized message/media value.
 
-    Scans for Postbox-encoded tagged fields:
-      - tag 'i' (Int64): file_id — pattern 01 69 01 <8b LE>
-      - tag 'd' (Int32): datacenter_id — pattern 01 64 00 <4b LE>
-      - tag 'dx'/'dy' (Int32): dimensions — pattern 02 64 78/79 00 <4b LE>
+    Telegram serializes file references in two encodings, both of which appear
+    in t7 message values and t6 media metadata:
 
-    Groups nearby (d, i, h, dx, dy) fields into media references.
-    Returns list of dicts with keys: file_id, dc_id, width, height.
+    1. Int64 form (regular chats):
+         01 69 01 <8b LE file_id>
+       Adjacent fields hold dc_id (`01 64 00 <4b LE>`) and dimensions
+       (`02 64 78/79 00 <4b LE>`).
+
+    2. Bytes-blob form (t6 entries; secret chats; newer message variants):
+         01 69 0a 0c <4b BE dc_id> <4b zero pad> <8b LE file_id>
+       This is a length-prefixed bytes field where the embedded blob carries
+       the dc_id and file_id together. Older parser builds missed this and
+       therefore failed to link any secret-chat media to its on-disk file.
+
+    Returns a deduplicated list with keys: file_id, dc_id, width, height.
     """
     refs = []
-    # Find all 'i' (file_id) Int64 fields: 01 69 01 <8 bytes LE>
-    i_marker = b'\x01\x69\x01'
+
+    def _add(file_id: int, dc_id: int, w: int = 0, h: int = 0) -> None:
+        if file_id == 0:
+            return
+        if any(r['file_id'] == file_id for r in refs):
+            return
+        ref = {'file_id': file_id, 'dc_id': dc_id}
+        if w:
+            ref['width'] = w
+        if h:
+            ref['height'] = h
+        refs.append(ref)
+
+    def _scan_dimensions(idx: int) -> tuple:
+        """Look up dx/dy Int32 fields in a 80-byte window around idx."""
+        window = value[max(0, idx - 80):min(len(value), idx + 80)]
+        w = h = 0
+        dx = window.find(b'\x02\x64\x78\x00')
+        if 0 <= dx and dx + 8 <= len(window):
+            w = struct.unpack('<I', window[dx + 4:dx + 8])[0]
+            if w > 10000:
+                w = 0
+        dy = window.find(b'\x02\x64\x79\x00')
+        if 0 <= dy and dy + 8 <= len(window):
+            h = struct.unpack('<I', window[dy + 4:dy + 8])[0]
+            if h > 10000:
+                h = 0
+        return w, h
+
+    # --- Form 1: Int64 file_id with separate dc_id ---
     pos = 0
     while pos < len(value) - 10:
-        idx = value.find(i_marker, pos)
+        idx = value.find(b'\x01\x69\x01', pos)
         if idx < 0:
             break
         file_id = struct.unpack('<q', value[idx + 3:idx + 11])[0]
@@ -252,50 +330,44 @@ def extract_media_refs(value: bytes) -> List[Dict[str, Any]]:
             pos = idx + 11
             continue
 
-        # Search backwards and forwards (within 80 bytes) for dc_id and dimensions
-        window_start = max(0, idx - 80)
-        window_end = min(len(value), idx + 80)
-        window = value[window_start:window_end]
-        rel = idx - window_start
-
         dc_id = 0
-        width = 0
-        height = 0
-
-        # Look for 'd' Int32: 01 64 00 <4b LE>
-        d_marker = b'\x01\x64\x00'
-        d_pos = window.find(d_marker)
+        window = value[max(0, idx - 80):min(len(value), idx + 80)]
+        d_pos = window.find(b'\x01\x64\x00')
         if 0 <= d_pos and d_pos + 7 <= len(window):
             dc_id = struct.unpack('<I', window[d_pos + 3:d_pos + 7])[0]
             if dc_id > 10:
-                dc_id = 0  # sanity check — dc_ids are small (1-5)
+                dc_id = 0
 
-        # Look for 'dx' Int32: 02 64 78 00 <4b LE>
-        dx_marker = b'\x02\x64\x78\x00'
-        dx_pos = window.find(dx_marker)
-        if 0 <= dx_pos and dx_pos + 8 <= len(window):
-            width = struct.unpack('<I', window[dx_pos + 4:dx_pos + 8])[0]
-            if width > 10000:
-                width = 0
-
-        # Look for 'dy' Int32: 02 64 79 00 <4b LE>
-        dy_marker = b'\x02\x64\x79\x00'
-        dy_pos = window.find(dy_marker)
-        if 0 <= dy_pos and dy_pos + 8 <= len(window):
-            height = struct.unpack('<I', window[dy_pos + 4:dy_pos + 8])[0]
-            if height > 10000:
-                height = 0
-
-        # Skip duplicates (same file_id appears twice per message for thumb + full)
-        if not any(r['file_id'] == file_id for r in refs):
-            ref = {'file_id': file_id, 'dc_id': dc_id}
-            if width:
-                ref['width'] = width
-            if height:
-                ref['height'] = height
-            refs.append(ref)
-
+        w, h = _scan_dimensions(idx)
+        _add(file_id, dc_id, w, h)
         pos = idx + 11
+
+    # --- Form 2: Bytes-blob form (i Bytes 0x0c) ---
+    # Pattern: 01 69 0a 0c <dc_id 4 BE> <4b pad> <file_id 8 LE>
+    # Total 19 bytes after the marker's last byte.
+    pos = 0
+    while pos < len(value) - 19:
+        idx = value.find(b'\x01\x69\x0a\x0c', pos)
+        if idx < 0:
+            break
+        if idx + 20 > len(value):
+            break
+        try:
+            dc_id = struct.unpack('>I', value[idx + 4:idx + 8])[0]
+            file_id = struct.unpack('<q', value[idx + 12:idx + 20])[0]
+        except struct.error:
+            pos = idx + 4
+            continue
+
+        # File IDs are large 64-bit numbers; small values here are just
+        # random byte alignments. The dc_id sanity is loose — resolve()
+        # will iterate DCs anyway if our guess doesn't match disk.
+        if abs(file_id) > 1_000_000_000:
+            if not (1 <= dc_id <= 10):
+                dc_id = 0
+            w, h = _scan_dimensions(idx)
+            _add(file_id, dc_id, w, h)
+        pos = idx + 4
 
     return refs
 
@@ -303,42 +375,45 @@ def extract_media_refs(value: bytes) -> List[Dict[str, Any]]:
 def resolve_media_files(refs: List[Dict], media_index: set) -> List[Dict[str, Any]]:
     """Resolve media refs to actual filenames on disk.
 
-    Tries patterns: telegram-cloud-photo-size-{dc}-{fid}-{suffix},
-    telegram-cloud-document-{dc}-{fid}, and local-file variants.
+    Telegram caches media under three different naming schemes depending on
+    where it came from:
+      • `telegram-cloud-photo-size-{dc}-{fid}-{suffix}` — multi-size cloud photos
+      • `telegram-cloud-document-{dc}-{fid}`           — cloud documents
+      • `secret-file-{fid}-{dc}[.ext]`                 — secret-chat E2E media
+
+    Secret chat media uses a flipped dc/fid order and an optional extension
+    suffix (`.jpg`, `.mp3`, etc.). We try each scheme in turn; if dc_id was
+    not pinned during extraction we sweep DCs 1..10.
     """
     resolved = []
     photo_suffixes = ['y', 'x', 'w', 'm', 'c', 's', 'a', 'b']
+    # Common extensions Telegram appends to secret-file caches (and the
+    # bare-no-extension form which is most common).
+    secret_ext_suffixes = ['', '.jpg', '.mp4', '.mp3', '.webm', '.ogg', '.png']
+
+    def _try_dc(fid, dc):
+        for suffix in photo_suffixes:
+            cand = f"telegram-cloud-photo-size-{dc}-{fid}-{suffix}"
+            if cand in media_index:
+                return cand
+        cand = f"telegram-cloud-document-{dc}-{fid}"
+        if cand in media_index:
+            return cand
+        for ext in secret_ext_suffixes:
+            cand = f"secret-file-{fid}-{dc}{ext}"
+            if cand in media_index:
+                return cand
+        return None
 
     for ref in refs:
         fid = ref['file_id']
         dc = ref.get('dc_id', 0)
-        matched = None
+        matched = _try_dc(fid, dc) if dc else None
 
-        # Try photo patterns (largest size first)
-        if dc:
-            for suffix in photo_suffixes:
-                candidate = f"telegram-cloud-photo-size-{dc}-{fid}-{suffix}"
-                if candidate in media_index:
-                    matched = candidate
-                    break
-            if not matched:
-                candidate = f"telegram-cloud-document-{dc}-{fid}"
-                if candidate in media_index:
-                    matched = candidate
-
-        # Try without dc_id (scan all dc values 1-5)
         if not matched:
-            for try_dc in range(1, 6):
-                for suffix in photo_suffixes:
-                    candidate = f"telegram-cloud-photo-size-{try_dc}-{fid}-{suffix}"
-                    if candidate in media_index:
-                        matched = candidate
-                        break
+            for try_dc in range(1, 11):
+                matched = _try_dc(fid, try_dc)
                 if matched:
-                    break
-                candidate = f"telegram-cloud-document-{try_dc}-{fid}"
-                if candidate in media_index:
-                    matched = candidate
                     break
 
         if matched:
@@ -507,17 +582,28 @@ def parse_messages_from_t7(
                 continue
 
             # Determine outgoing flag based on message format.
-            # Byte 9 is a format discriminator:
-            #   0x00 = standard (user/group/bot): flags at byte 10, bit 2 = outgoing
-            #   0x01 = secret chat: flags at byte 10, bit 2 = outgoing
-            #   0x20/0x2c = channel format: flags at byte 18, but bit 2 means
-            #     "channel posted this" (always set), NOT "user sent this"
-            # For channels (hi=2), messages are always incoming from user perspective.
+            #
+            # Channels (hi=2): always incoming from a user's perspective.
+            # Secret chats (hi=3): direction is in KEY bytes 8-11 (namespace
+            #   tag), since the value's byte 10 is part of a random message ID,
+            #   not a flags byte. tag=1 means outgoing, tag=2 means incoming.
+            #   Verified by cross-referencing user-confirmed sent messages.
+            # Everything else (users, bots, groups): byte 10 of the VALUE
+            #   contains Postbox StoreMessageFlags; bit 2 (0x04) is the
+            #   `Incoming` flag — set when received, clear when sent.
             hi = (peer_id >> 32) & 0xFFFFFFFF
             if hi == 2:
                 is_outgoing = False
+            elif hi == 3:
+                if len(key) >= 12:
+                    secret_tag = struct.unpack('>I', key[8:12])[0]
+                    is_outgoing = (secret_tag == 1)
+                else:
+                    is_outgoing = False
+            elif len(value) > 10:
+                is_outgoing = not bool(value[10] & 0x04)
             else:
-                is_outgoing = bool(len(value) > 10 and value[10] & 0x04)
+                is_outgoing = False
 
             msg = {
                 'peer_id': peer_id,
@@ -659,12 +745,30 @@ def export_account(
         with open(account_dir / 'messages_fts.json', 'w', encoding='utf-8') as f:
             json.dump(messages_fts, f, indent=2, ensure_ascii=False)
 
-    # Step 4: Create combined export
-    all_messages = messages_t7 + [
-        {**m, 'text': m['text']}
-        for m in messages_fts
-        if not any(t7m['text'] == m['text'] for t7m in messages_t7[:100])
-    ]
+    # Step 3b: Build media catalog (full scan of media/ directory)
+    if media_dir and media_dir.is_dir():
+        print("  Building media catalog...")
+        catalog = build_media_catalog(media_dir, messages_t7)
+        if catalog:
+            with open(account_dir / 'media_catalog.json', 'w', encoding='utf-8') as f:
+                json.dump(catalog, f, indent=2, ensure_ascii=False)
+        result['media_files'] = len(catalog)
+
+    # Step 4: Create combined export, deduping FTS entries that already exist in t7.
+    # Key on (peer_id, text) so identical replies in different chats are kept distinct.
+    seen = {(m.get('peer_id'), m.get('text', '')) for m in messages_t7 if m.get('text')}
+    fts_dedup = []
+    for m in messages_fts:
+        text = m.get('text', '')
+        peer_key = str(m.get('peer_ref', '')).lstrip('p')
+        try:
+            peer_int = int(peer_key) if peer_key else None
+        except ValueError:
+            peer_int = None
+        if (peer_int, text) in seen:
+            continue
+        fts_dedup.append(m)
+    all_messages = messages_t7 + fts_dedup
 
     all_messages.sort(key=lambda m: m.get('timestamp', 0), reverse=True)
 
