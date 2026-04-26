@@ -1,4 +1,4 @@
-"""tg-viewer web UI package — FastAPI backend over parsed_data JSON files."""
-from webui.app import create_app
+"""tg-viewer web UI package — FastAPI backend over parsed_data JSON files.
 
-__all__ = ["create_app"]
+The `create_app` factory will be re-exported here once Task 6 lands `webui.app`.
+"""
