@@ -10,7 +10,7 @@ BACKUP_SCRIPT="$SCRIPT_DIR/tg-backup.sh"
 EXTRACT_SCRIPT="$SCRIPT_DIR/extract-keys.sh"
 APPSTORE_DECRYPT_SCRIPT="$SCRIPT_DIR/tg_appstore_decrypt.py"
 POSTBOX_PARSER_SCRIPT="$SCRIPT_DIR/postbox_parser.py"
-WEBUI_SCRIPT="$SCRIPT_DIR/webui.py"
+WEBUI_SCRIPT_DIR="$SCRIPT_DIR/webui"
 REQUIREMENTS_FILE="$SCRIPT_DIR/requirements.txt"
 
 # ── Colors ────────────────────────────────────────────────────────────────────
@@ -82,9 +82,10 @@ check_dependencies() {
     local missing=()
     
     # Check required scripts
-    for script in "$BACKUP_SCRIPT" "$APPSTORE_DECRYPT_SCRIPT" "$POSTBOX_PARSER_SCRIPT" "$WEBUI_SCRIPT"; do
+    for script in "$BACKUP_SCRIPT" "$APPSTORE_DECRYPT_SCRIPT" "$POSTBOX_PARSER_SCRIPT"; do
         [[ -f "$script" ]] || missing+=("$(basename "$script")")
     done
+    [[ -d "$WEBUI_SCRIPT_DIR" ]] || missing+=("webui/")
     
     # Check Python
     if ! command -v python3 &>/dev/null; then
@@ -114,7 +115,7 @@ setup_dependencies() {
     fi
     
     # Make scripts executable
-    for script in "$BACKUP_SCRIPT" "$EXTRACT_SCRIPT" "$APPSTORE_DECRYPT_SCRIPT" "$POSTBOX_PARSER_SCRIPT" "$WEBUI_SCRIPT"; do
+    for script in "$BACKUP_SCRIPT" "$EXTRACT_SCRIPT" "$APPSTORE_DECRYPT_SCRIPT" "$POSTBOX_PARSER_SCRIPT"; do
         if [[ -f "$script" ]]; then
             chmod +x "$script"
             log "Made executable: $(basename "$script")"
@@ -197,19 +198,23 @@ run_webui() {
     
     title "Step 4: Starting Web UI"
     
-    if [[ ! -f "$WEBUI_SCRIPT" ]]; then
-        die "Web UI script not found: $WEBUI_SCRIPT"
+    if [[ ! -d "$WEBUI_SCRIPT_DIR" ]]; then
+        die "Web UI package not found: $WEBUI_SCRIPT_DIR"
     fi
-    
+
     if [[ ! -d "$data_dir" ]]; then
         die "Data directory not found: $data_dir"
     fi
-    
+
+    # Resolve to absolute path so the subshell `cd "$SCRIPT_DIR"` doesn't break a relative data_dir
+    local abs_data_dir
+    abs_data_dir="$(cd "$data_dir" && pwd)"
+
     log "Starting web interface..."
-    log "Data directory: $(_redact_path "$data_dir")"
+    log "Data directory: $(_redact_path "$abs_data_dir")"
     log "URL: http://$host:$port"
-    
-    python3 "$WEBUI_SCRIPT" "$data_dir" --host "$host" --port "$port"
+
+    (cd "$SCRIPT_DIR" && python3 -m webui "$abs_data_dir" --host "$host" --port "$port")
 }
 
 run_clean() {

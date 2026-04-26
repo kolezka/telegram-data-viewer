@@ -1,0 +1,5 @@
+[
+  {"peer_id": 111, "text": "hello from alice", "timestamp": 1700000010, "outgoing": false},
+  {"peer_id": 111, "text": "reply to alice", "timestamp": 1700000020, "outgoing": true},
+  {"peer_id": 222, "text": "msg to bob", "timestamp": 1700000005, "outgoing": true}
+]

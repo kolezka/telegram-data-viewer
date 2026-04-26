@@ -35,7 +35,8 @@ def check_dependencies():
     for pkg, import_name in [
         ("sqlcipher3", "sqlcipher3"),
         ("cryptography", "cryptography"),
-        ("flask", "flask"),
+        ("fastapi", "fastapi"),
+        ("uvicorn", "uvicorn"),
     ]:
         try:
             __import__(import_name)
@@ -176,14 +177,14 @@ def step_parse(backup_dir: Path, databases: list, output_dir: Path) -> dict:
 
 
 def step_webui(data_dir: Path, port: int):
-    """Start the Flask web UI."""
+    """Start the FastAPI web UI."""
     print(f"\n=== Web UI ===")
     print(f"  Data: {data_dir}")
     print(f"  URL:  http://127.0.0.1:{port}")
     print(f"  Press Ctrl+C to stop\n")
 
     subprocess.run(
-        [sys.executable, "webui.py", str(data_dir), "--port", str(port)],
+        [sys.executable, "-m", "webui", str(data_dir), "--port", str(port)],
         cwd=Path(__file__).parent,
     )
 

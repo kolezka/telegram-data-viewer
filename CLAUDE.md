@@ -7,7 +7,7 @@ Telegram data extraction, decryption, and visualization toolkit for macOS. Extra
 ## Architecture
 
 ```
-tg-backup.sh -> tg_appstore_decrypt.py -> postbox_parser.py -> webui.py
+tg-backup.sh -> tg_appstore_decrypt.py -> postbox_parser.py -> python -m webui
 ```
 
 `tg-viewer` orchestrates this pipeline. It decrypts `.tempkeyEncrypted` (AES-CBC with SHA-512 of password), opens SQLCipher with `PRAGMA cipher_default_plaintext_header_size = 32`, and parses Postbox binary format from tables t2 (peers) and t7 (messages).
@@ -22,7 +22,7 @@ Legacy pipeline (`extract-keys.sh` + `tg_decrypt.py`) still exists but is not us
 | `tg-backup.sh` | Backup Telegram data from macOS (supports `--batch` for non-interactive use) |
 | `tg_appstore_decrypt.py` | Decrypt .tempkeyEncrypted + open SQLCipher databases |
 | `postbox_parser.py` | Parse Postbox binary format, extract messages/peers/conversations |
-| `webui.py` | Flask web UI (supports both parsed_data and legacy export formats) |
+| `webui/` | FastAPI web UI package — entrypoint `python -m webui` (supports both parsed_data and legacy export formats) |
 | `extract-keys.sh` | Extract keys from Keychain (legacy) |
 | `tg_decrypt.py` | Legacy decryptor (tries multiple key formats) |
 
