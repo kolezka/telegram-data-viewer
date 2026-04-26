@@ -85,7 +85,7 @@ def step_decrypt(backup_dir: Path, password: str) -> tuple:
     """Decrypt .tempkeyEncrypted and return (db_key, db_salt)."""
     print("\n=== Step 2: Decrypt encryption key ===")
 
-    from tg_appstore_decrypt import decrypt_tempkey
+    from extract.tg_appstore_decrypt import decrypt_tempkey
 
     tempkey_path = None
     for candidate in [
@@ -146,7 +146,7 @@ def step_parse(backup_dir: Path, databases: list, output_dir: Path) -> dict:
     """Parse messages from all databases."""
     print("\n=== Step 4: Parse messages ===")
 
-    from postbox_parser import (
+    from extract.postbox_parser import (
         parse_peer_from_t2,
         parse_messages_from_t7,
         parse_messages_from_fts,
