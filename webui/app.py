@@ -42,4 +42,6 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     app.include_router(chats.router)
     from webui.routers import messages
     app.include_router(messages.router)
+    from webui.routers import media
+    app.include_router(media.router)
     return app
