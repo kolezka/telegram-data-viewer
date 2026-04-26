@@ -1,0 +1,4 @@
+{
+  "backup_dir": "tests/fixtures/mini-parsed",
+  "accounts": ["account-1000000001"]
+}
