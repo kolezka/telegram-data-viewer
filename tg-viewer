@@ -6,10 +6,10 @@ set -euo pipefail
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BACKUP_SCRIPT="$SCRIPT_DIR/tg-backup.sh"
-EXTRACT_SCRIPT="$SCRIPT_DIR/extract-keys.sh"
-APPSTORE_DECRYPT_SCRIPT="$SCRIPT_DIR/tg_appstore_decrypt.py"
-POSTBOX_PARSER_SCRIPT="$SCRIPT_DIR/postbox_parser.py"
+BACKUP_SCRIPT="$SCRIPT_DIR/extract/tg-backup.sh"
+EXTRACT_SCRIPT="$SCRIPT_DIR/extract/extract-keys.sh"
+APPSTORE_DECRYPT_SCRIPT="$SCRIPT_DIR/extract/tg_appstore_decrypt.py"
+POSTBOX_PARSER_SCRIPT="$SCRIPT_DIR/extract/postbox_parser.py"
 WEBUI_SCRIPT_DIR="$SCRIPT_DIR/webui"
 REQUIREMENTS_FILE="$SCRIPT_DIR/requirements.txt"
 
@@ -172,7 +172,7 @@ run_decrypt() {
     [[ "${TG_REDACT:-0}" == "1" ]] && redact_arg=(--redact)
 
     log "Decrypting databases in: $(_redact_path "$backup_dir")"
-    python3 "$APPSTORE_DECRYPT_SCRIPT" "$backup_dir" "${redact_arg[@]+"${redact_arg[@]}"}"
+    (cd "$SCRIPT_DIR" && python3 -m extract.tg_appstore_decrypt "$backup_dir" "${redact_arg[@]+"${redact_arg[@]}"}")
 }
 
 run_parse() {
@@ -188,7 +188,7 @@ run_parse() {
     [[ "${TG_REDACT:-0}" == "1" ]] && redact_arg=(--redact)
 
     log "Parsing messages, peers, and conversations in: $(_redact_path "$backup_dir")"
-    python3 "$POSTBOX_PARSER_SCRIPT" "$backup_dir" "${redact_arg[@]+"${redact_arg[@]}"}"
+    (cd "$SCRIPT_DIR" && python3 -m extract.postbox_parser "$backup_dir" "${redact_arg[@]+"${redact_arg[@]}"}")
 }
 
 run_webui() {
