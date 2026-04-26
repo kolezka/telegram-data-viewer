@@ -57,6 +57,32 @@ _redact_path() {
     fi
 }
 
+# Mask a personal name when TG_REDACT=1 — keeps first letter of each
+# space-separated word and replaces the rest with `*`. Mirrors
+# redact.name() in redact.py so terminal output stays consistent.
+_redact_name() {
+    if [[ "${TG_REDACT:-0}" != "1" ]]; then
+        echo "$1"
+        return
+    fi
+    local raw="$1"
+    local trimmed="${raw#"${raw%%[! ]*}"}"
+    trimmed="${trimmed%"${trimmed##*[! ]}"}"
+    if [[ -z "$trimmed" || "$trimmed" == "unknown" || "$trimmed" == "None" ]]; then
+        echo "***"
+        return
+    fi
+    local out="" word
+    for word in $trimmed; do
+        if (( ${#word} <= 1 )); then
+            out+="* "
+        else
+            out+="${word:0:1}$(printf '*%.0s' $(seq 1 $((${#word} - 1)))) "
+        fi
+    done
+    echo "${out% }"
+}
+
 # ── Sanity checks ─────────────────────────────────────────────────────────────
 if pgrep -x "Telegram" > /dev/null 2>&1 && [[ "$BATCH_MODE" == false ]]; then
   warn "Telegram is currently running."
@@ -124,14 +150,15 @@ for d in "${ACCOUNT_DIRS[@]}"; do
   dir_name=$(basename "$d")
   dir_id="${dir_name#account-}"
   label=$(get_account_name "$dir_id")
+  safe_label=$(_redact_name "$label")
   db_path="$d/postbox/db/db_sqlite"
   safe_name="$dir_name"
   [[ "${TG_REDACT:-0}" == "1" ]] && safe_name="account-***"
   if [[ -f "$db_path" ]]; then
     db_size=$(du -sh "$db_path" 2>/dev/null | cut -f1)
-    log "  $safe_name ($label) — postbox DB: $db_size"
+    log "  $safe_name ($safe_label) — postbox DB: $db_size"
   else
-    log "  $safe_name ($label) — no postbox DB found"
+    log "  $safe_name ($safe_label) — no postbox DB found"
   fi
 done
 echo ""
@@ -160,10 +187,11 @@ for d in "${ACCOUNT_DIRS[@]}"; do
   dir_name=$(basename "$d")
   dir_id="${dir_name#account-}"
   label=$(get_account_name "$dir_id")
+  safe_label=$(_redact_name "$label")
   echo ""
   safe_name="$dir_name"
   [[ "${TG_REDACT:-0}" == "1" ]] && safe_name="account-***"
-  log "━━━ Backing up $safe_name ($label) ━━━"
+  log "━━━ Backing up $safe_name ($safe_label) ━━━"
 
   acct_backup="$BACKUP_DIR/$dir_name"
   mkdir -p "$acct_backup"

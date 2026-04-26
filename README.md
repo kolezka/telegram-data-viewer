@@ -153,7 +153,7 @@ python3 postbox_parser.py     ./tg_2026-04-26_01-26-40 --password "your_passcode
 
 ### Privacy-preserving runs (`--redact`)
 
-Mask account IDs, encryption keys, and absolute paths in console output — useful for sharing logs or screen-recording:
+Mask account IDs, encryption keys, absolute paths, and personal names in console output — useful for sharing logs or screen-recording:
 
 ```bash
 ./tg-viewer --redact full
@@ -162,7 +162,7 @@ python3 postbox_parser.py ./data --redact
 python3 tg_appstore_decrypt.py ./data --redact
 ```
 
-Redaction applies to terminal output only — JSON outputs and the web UI are unchanged.
+Names are masked structurally (`"Alice Smith"` → `"A**** S****"`) so the log stays readable while leaking nothing useful. Redaction applies to terminal output only — JSON outputs and the web UI are unchanged.
 
 ### Multiple accounts at once
 

@@ -52,11 +52,39 @@ def path(value) -> str:
     return _TG_BACKUP_SEGMENT.sub("<backup>", str(value))
 
 
+def name(value) -> str:
+    """Mask a personal name (peer/user/contact display name).
+
+    Preserves the rough shape so logs stay readable: keeps the first
+    letter of each word and length hint. `"Alice Smith"` becomes
+    `"A**** S****"`; empty / unknown / single-char inputs collapse
+    to `"***"`.
+    """
+    if not REDACT:
+        return str(value) if value is not None else ""
+    if value is None:
+        return "***"
+    s = str(value).strip()
+    if not s or s.lower() in {"unknown", "none", "null"}:
+        return "***"
+    parts = s.split()
+    masked_parts = []
+    for p in parts:
+        if len(p) <= 1:
+            masked_parts.append("*")
+        else:
+            masked_parts.append(p[0] + "*" * (len(p) - 1))
+    return " ".join(masked_parts) or "***"
+
+
 if __name__ == "__main__":
     # Off by default
     assert REDACT is False
     assert account(12345678) == "12345678"
     assert hexkey("a1b2c3d4") == "a1b2c3d4"
+    assert name("Alice Smith") == "Alice Smith"
+    assert name("") == ""
+    assert name(None) == ""
     assert path("/tmp/tg_2026-04-15_12-58-12/parsed_data") == "/tmp/tg_2026-04-15_12-58-12/parsed_data"
 
     # On
@@ -66,6 +94,13 @@ if __name__ == "__main__":
     assert account(None) == "***"
     assert hexkey("a1b2...ef01") == "***"
     assert hexkey("") == "***"
+    assert name("Alice Smith") == "A**** S****"
+    assert name("Alice") == "A****"
+    assert name("X") == "*"
+    assert name("") == "***"
+    assert name(None) == "***"
+    assert name("unknown") == "***"
+    assert name("  John   Doe ") == "J*** D**"
     assert path("/tmp/tg_2026-04-15_12-58-12/parsed_data") == "/tmp/<backup>/parsed_data"
     assert path("./tg_2026-04-15_12-58-12") == "./<backup>"
     assert path(Path("/a/tg_2026-04-15_12-58-12/b")) == "/a/<backup>/b"
@@ -75,5 +110,6 @@ if __name__ == "__main__":
     # Back off — flag is resettable
     set_enabled(False)
     assert account(12345678) == "12345678"
+    assert name("Alice Smith") == "Alice Smith"
 
     print("redact.py self-test: OK")
