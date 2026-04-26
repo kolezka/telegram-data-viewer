@@ -5,6 +5,7 @@ import DatabasesTab from "./components/DatabasesTab";
 import UsersTab from "./components/UsersTab";
 import ChatsTab from "./components/ChatsTab";
 import MessagesTab from "./components/MessagesTab";
+import MediaTab from "./components/MediaTab";
 
 export default function App() {
   const [active, setActive] = useState<TabKey>("stats");
@@ -25,13 +26,9 @@ export default function App() {
           {active === "chats" && <ChatsTab />}
           {active === "messages" && <MessagesTab />}
           {active === "users" && <UsersTab />}
-          {active === "media" && <PlaceholderTab name="Media" />}
+          {active === "media" && <MediaTab />}
         </div>
       </div>
     </div>
   );
-}
-
-function PlaceholderTab({ name }: { name: string }) {
-  return <div className="text-gray-500">{name} tab — implemented in later tasks.</div>;
 }
