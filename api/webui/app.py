@@ -48,8 +48,29 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     app.include_router(export_data.router)
 
     # Mount the React bundle at /. If web/dist/ is missing (e.g., in a fresh
-    # CI checkout), the API endpoints still work; only / returns 404.
+    # CI checkout or direct `python -m webui` without a build), surface a clear
+    # message at / instead of FastAPI's default 404 — the API itself still works.
     if WEB_DIST.is_dir():
         app.mount("/", StaticFiles(directory=str(WEB_DIST), html=True), name="webdist")
+    else:
+        from fastapi.responses import HTMLResponse
+
+        @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+        def _frontend_missing() -> HTMLResponse:
+            return HTMLResponse(
+                """<!doctype html><meta charset="utf-8">
+<title>tg-viewer — frontend not built</title>
+<style>body{font:14px system-ui;margin:40px;max-width:640px}code{background:#f4f4f4;padding:2px 6px;border-radius:3px}</style>
+<h1>Frontend not built</h1>
+<p>The React bundle at <code>web/dist/</code> doesn't exist yet.</p>
+<p>Run one of:</p>
+<ul>
+  <li><code>./tg-viewer webui &lt;DIR&gt;</code> — auto-installs Bun deps and builds.</li>
+  <li><code>cd web &amp;&amp; bun install &amp;&amp; bun run build</code> — manual build.</li>
+</ul>
+<p>The API itself is up — try <a href="/docs">/docs</a> or <a href="/api/stats">/api/stats</a>.</p>
+""",
+                status_code=503,
+            )
 
     return app
