@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Optional, Tuple, Dict, List, Any
 from datetime import datetime
 
-import redact
+from . import redact
 
 # AES-CBC decryption
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes

@@ -7,24 +7,27 @@ Telegram data extraction, decryption, and visualization toolkit for macOS. Extra
 ## Architecture
 
 ```
-tg-backup.sh -> tg_appstore_decrypt.py -> postbox_parser.py -> python -m webui
+extract/tg-backup.sh → extract/tg_appstore_decrypt.py → extract/postbox_parser.py → python -m webui (in api/)
 ```
 
 `tg-viewer` orchestrates this pipeline. It decrypts `.tempkeyEncrypted` (AES-CBC with SHA-512 of password), opens SQLCipher with `PRAGMA cipher_default_plaintext_header_size = 32`, and parses Postbox binary format from tables t2 (peers) and t7 (messages).
 
-Legacy pipeline (`extract-keys.sh` + `tg_decrypt.py`) still exists but is not used by `tg-viewer`.
+Legacy pipeline (`extract/extract-keys.sh` + `extract/tg_decrypt.py`) still exists but is not used by `tg-viewer`.
 
 ## Key files
 
 | File | Purpose |
 |------|---------|
 | `tg-viewer` | CLI orchestrator (bash) — `full`, `backup`, `decrypt`, `parse`, `webui`, `clean` |
-| `tg-backup.sh` | Backup Telegram data from macOS (supports `--batch` for non-interactive use) |
-| `tg_appstore_decrypt.py` | Decrypt .tempkeyEncrypted + open SQLCipher databases |
-| `postbox_parser.py` | Parse Postbox binary format, extract messages/peers/conversations |
-| `webui/` | FastAPI web UI package — entrypoint `python -m webui` (supports both parsed_data and legacy export formats) |
-| `extract-keys.sh` | Extract keys from Keychain (legacy) |
-| `tg_decrypt.py` | Legacy decryptor (tries multiple key formats) |
+| `extract/tg-backup.sh` | Backup Telegram data from macOS (supports `--batch` for non-interactive use) |
+| `extract/tg_appstore_decrypt.py` | Decrypt .tempkeyEncrypted + open SQLCipher databases |
+| `extract/postbox_parser.py` | Parse Postbox binary format, extract messages/peers/conversations |
+| `extract/redact.py` | Console output redaction helpers |
+| `api/webui/` | FastAPI backend package — `python -m webui` (with `cwd=api/`) |
+| `api/templates/index.html` | Transitional inline-JS frontend (deleted in Phase 2b) |
+| `web/` | Phase 2b React + Bun frontend (placeholder for now) |
+| `extract/extract-keys.sh` | Extract keys from Keychain (legacy) |
+| `extract/tg_decrypt.py` | Legacy decryptor (tries multiple key formats) |
 
 ## Development commands
 
