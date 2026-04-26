@@ -55,3 +55,7 @@ Thumbs.db
 # Environment
 .env
 .env.*
+
+# Phase 2b web frontend
+web/node_modules/
+web/dist/
