@@ -4,6 +4,7 @@ import StatsTab from "./components/StatsTab";
 import DatabasesTab from "./components/DatabasesTab";
 import UsersTab from "./components/UsersTab";
 import ChatsTab from "./components/ChatsTab";
+import MessagesTab from "./components/MessagesTab";
 
 export default function App() {
   const [active, setActive] = useState<TabKey>("stats");
@@ -22,7 +23,7 @@ export default function App() {
           {active === "stats" && <StatsTab />}
           {active === "databases" && <DatabasesTab />}
           {active === "chats" && <ChatsTab />}
-          {active === "messages" && <PlaceholderTab name="Messages" />}
+          {active === "messages" && <MessagesTab />}
           {active === "users" && <UsersTab />}
           {active === "media" && <PlaceholderTab name="Media" />}
         </div>
