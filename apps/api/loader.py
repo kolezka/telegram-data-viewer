@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from webui.state import AppState
+from api.state import AppState
 
 
 def load_parsed_data(data_dir: Path) -> dict[str, Any]:

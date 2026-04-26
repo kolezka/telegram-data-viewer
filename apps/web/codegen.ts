@@ -15,7 +15,7 @@ console.log(`Fetching ${url}...`);
 const res = await fetch(url);
 if (!res.ok) {
   console.error(`Failed: ${res.status} ${res.statusText}`);
-  console.error("Is the FastAPI server running? Try: cd .. && (cd api && python3 -m webui api/tests/fixtures/mini-parsed)");
+  console.error("Is the FastAPI server running? Try: cd ../.. && (cd apps && python3 -m api apps/api/tests/fixtures/mini-parsed)");
   process.exit(1);
 }
 const schema = await res.text();

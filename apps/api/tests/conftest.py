@@ -7,13 +7,13 @@ from pathlib import Path
 import pytest
 
 
-# api/tests/conftest.py → parents: api/tests/, api/, <repo root>
-API_DIR = Path(__file__).resolve().parent.parent
-REPO_ROOT = API_DIR.parent
-FIXTURE_DIR = API_DIR / "tests" / "fixtures" / "mini-parsed"
+# apps/api/tests/conftest.py → parents: apps/api/tests/, apps/api/, apps/, <repo root>
+APPS_DIR = Path(__file__).resolve().parent.parent.parent
+REPO_ROOT = APPS_DIR.parent
+FIXTURE_DIR = APPS_DIR / "api" / "tests" / "fixtures" / "mini-parsed"
 
-# Make `webui` importable from api/, and `extract` importable from repo root.
-for path in (str(API_DIR), str(REPO_ROOT)):
+# Make `api` and `tool` importable (both live as top-level packages under apps/).
+for path in (str(APPS_DIR), str(REPO_ROOT)):
     if path not in sys.path:
         sys.path.insert(0, path)
 
@@ -29,7 +29,7 @@ def fastapi_client(mini_data_dir: Path):
     """FastAPI TestClient with the mini-parsed fixture loaded."""
     from fastapi.testclient import TestClient
 
-    from webui.app import create_app
+    from api.app import create_app
 
     app = create_app(str(mini_data_dir))
     with TestClient(app) as client:

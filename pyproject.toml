@@ -1,2 +1,2 @@
 [tool.pytest.ini_options]
-testpaths = ["api/tests"]
+testpaths = ["apps/api/tests"]

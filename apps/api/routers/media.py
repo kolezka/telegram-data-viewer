@@ -6,8 +6,8 @@ import re
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 
-from webui.mime import detect_mime
-from webui.models import MediaItem, MediaPage
+from api.mime import detect_mime
+from api.models import MediaItem, MediaPage
 
 router = APIRouter(prefix="/api", tags=["media"])
 

@@ -14,10 +14,10 @@ Detailed step-by-step usage and common workflows for `tg-viewer`.
 Or call the scripts directly:
 
 ```bash
-./extract/tg-backup.sh ./data
-python3 extract/tg_appstore_decrypt.py ./data/tg_*/
-python3 extract/postbox_parser.py ./data/tg_*/
-./tg-viewer webui ./data/tg_*/parsed_data    # or: (cd api && python3 -m webui ../data/tg_*/parsed_data)
+./apps/tool/tg-backup.sh ./data
+(cd apps && python3 -m tool.tg_appstore_decrypt ../data/tg_*/)
+(cd apps && python3 -m tool.postbox_parser ../data/tg_*/)
+./tg-viewer webui ./data/tg_*/parsed_data    # or: (cd apps && python3 -m api ../data/tg_*/parsed_data)
 ```
 
 ## Common scenarios
@@ -46,11 +46,11 @@ The parser is idempotent — re-running it overwrites `parsed_data/` in place. U
 You can also call the parser directly to use extra flags:
 
 ```bash
-python3 extract/postbox_parser.py ./tg_2026-04-26_01-26-40                                # all accounts
-python3 extract/postbox_parser.py ./tg_2026-04-26_01-26-40 --account 12103474868840298699 # one account
-python3 extract/postbox_parser.py ./tg_2026-04-26_01-26-40 --output ./custom-out          # custom output dir
-python3 extract/postbox_parser.py ./tg_2026-04-26_01-26-40 --password "your_passcode"     # custom passcode
-python3 extract/postbox_parser.py ./tg_2026-04-26_01-26-40 --redact                       # mask paths/IDs in logs
+(cd apps && python3 -m tool.postbox_parser ../tg_2026-04-26_01-26-40)                                # all accounts
+(cd apps && python3 -m tool.postbox_parser ../tg_2026-04-26_01-26-40 --account 12103474868840298699) # one account
+(cd apps && python3 -m tool.postbox_parser ../tg_2026-04-26_01-26-40 --output ../custom-out)         # custom output dir
+(cd apps && python3 -m tool.postbox_parser ../tg_2026-04-26_01-26-40 --password "your_passcode")     # custom passcode
+(cd apps && python3 -m tool.postbox_parser ../tg_2026-04-26_01-26-40 --redact)                       # mask paths/IDs in logs
 ```
 
 ### Re-decrypt only (faster than full pipeline)
@@ -60,7 +60,7 @@ If you only need fresh `decrypted_data/` (for example to inspect raw SQLite tabl
 ```bash
 ./tg-viewer decrypt ./tg_2026-04-26_01-26-40
 # or directly:
-python3 extract/tg_appstore_decrypt.py ./tg_2026-04-26_01-26-40 --output ./decrypted-out
+(cd apps && python3 -m tool.tg_appstore_decrypt ../tg_2026-04-26_01-26-40 --output ../decrypted-out)
 ```
 
 ### Process an externally-imported account
@@ -77,16 +77,16 @@ tg_imported_docs/
 ```
 
 ```bash
-python3 extract/postbox_parser.py ./tg_imported_docs --output ./tg_imported_docs/parsed_data
+(cd apps && python3 -m tool.postbox_parser ../tg_imported_docs --output ../tg_imported_docs/parsed_data)
 ./tg-viewer webui ./tg_imported_docs/parsed_data
 ```
 
 If you have the raw `dbKey` + `dbSalt` instead of `.tempkeyEncrypted`, pass them explicitly:
 
 ```bash
-python3 extract/postbox_parser.py ./tg_imported_docs \
+(cd apps && python3 -m tool.postbox_parser ../tg_imported_docs \
     --db-key   <64-hex-chars> \
-    --db-salt  <32-hex-chars>
+    --db-salt  <32-hex-chars>)
 ```
 
 ### Inspect parsed data without the web UI
@@ -114,8 +114,8 @@ If you've set a Telegram local passcode, pass it through the workflow:
 
 ```bash
 TG_PASSCODE="your_passcode"   # used by webui's auto-detection
-python3 extract/tg_appstore_decrypt.py ./tg_2026-04-26_01-26-40 --password "your_passcode"
-python3 extract/postbox_parser.py     ./tg_2026-04-26_01-26-40 --password "your_passcode"
+(cd apps && python3 -m tool.tg_appstore_decrypt ../tg_2026-04-26_01-26-40 --password "your_passcode")
+(cd apps && python3 -m tool.postbox_parser     ../tg_2026-04-26_01-26-40 --password "your_passcode")
 ```
 
 ### Privacy-preserving runs (`--redact`)
@@ -125,8 +125,8 @@ Mask account IDs, encryption keys, absolute paths, and personal names in console
 ```bash
 ./tg-viewer --redact full
 TG_REDACT=1 ./tg-viewer full              # equivalent via env var
-python3 extract/postbox_parser.py ./data --redact
-python3 extract/tg_appstore_decrypt.py ./data --redact
+(cd apps && python3 -m tool.postbox_parser ../data --redact)
+(cd apps && python3 -m tool.tg_appstore_decrypt ../data --redact)
 ```
 
 Names are masked structurally (`"Alice Smith"` → `"A**** S****"`) so the log stays readable while leaking nothing useful. Redaction applies to terminal output only — JSON outputs and the web UI are unchanged.
@@ -136,7 +136,7 @@ Names are masked structurally (`"Alice Smith"` → `"A**** S****"`) so the log s
 The parser auto-discovers every `account-*/` directory under the backup root. If you only want one:
 
 ```bash
-python3 extract/postbox_parser.py ./tg_2026-04-26_01-26-40 --account 12103474868840298699
+(cd apps && python3 -m tool.postbox_parser ../tg_2026-04-26_01-26-40 --account 12103474868840298699)
 ```
 
 The web UI loads every account directory it finds in `parsed_data/`, so the Chats / Media / Users tabs aggregate across all accounts. Each result row carries the `_account` field so you can tell which account it came from.

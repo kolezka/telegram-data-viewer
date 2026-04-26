@@ -1,5 +1,5 @@
 """Unit tests for the peer_type helper. All six branches must remain covered."""
-from webui.peer import peer_type
+from api.peer import peer_type
 
 
 def test_peer_type_user():
