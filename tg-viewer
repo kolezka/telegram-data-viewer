@@ -409,12 +409,14 @@ EOF
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 main() {
-    local command="${1:-help}"
     local port="5000"
     local host="127.0.0.1"
     local redact=false
+    local positionals=()
 
-    # Parse global options
+    # Parse global options from anywhere in the arg list. Both forms work:
+    #   ./tg-viewer --redact full
+    #   ./tg-viewer full --redact
     while [[ $# -gt 0 ]]; do
         case $1 in
             --port) port="$2"; shift 2 ;;
@@ -422,15 +424,16 @@ main() {
             --redact) redact=true; shift ;;
             --help|-h) show_help; exit 0 ;;
             -*) die "Unknown option: $1" ;;
-            *) break ;;
+            *) positionals+=("$1"); shift ;;
         esac
     done
 
     if [[ "$redact" == true ]]; then
         export TG_REDACT=1
     fi
-    
-    command="${1:-help}"
+
+    set -- "${positionals[@]+"${positionals[@]}"}"
+    local command="${1:-help}"
     
     case "$command" in
         setup)
