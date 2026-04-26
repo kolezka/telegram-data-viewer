@@ -59,3 +59,4 @@ Thumbs.db
 # Phase 2b web frontend
 web/node_modules/
 web/dist/
+web/src/styles.generated.css

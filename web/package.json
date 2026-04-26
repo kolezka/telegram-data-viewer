@@ -6,7 +6,9 @@
     "dev": "bun --hot ./serve.ts",
     "build": "bun ./build.ts",
     "codegen": "bun ./codegen.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "css:watch": "bunx tailwindcss -i ./src/styles.css -o ./src/styles.generated.css --watch",
+    "css:build": "bunx tailwindcss -i ./src/styles.css -o ./src/styles.generated.css --minify"
   },
   "dependencies": {
     "react": "^18.3.1",
