@@ -1,3 +1,4 @@
 [
-  {"peer_ref": "p222", "text": "deleted message to bob", "fts_id": 1, "msg_ref": "x"}
+  {"peer_ref": "p222", "text": "deleted message to bob", "fts_id": 1, "msg_ref": "x"},
+  {"peer_ref": "p222", "text": "msg to bob", "fts_id": 2, "msg_ref": "y"}
 ]
