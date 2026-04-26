@@ -1,5 +1,7 @@
 import { useState } from "react";
 import TabNav, { type TabKey } from "./components/TabNav";
+import StatsTab from "./components/StatsTab";
+import DatabasesTab from "./components/DatabasesTab";
 
 export default function App() {
   const [active, setActive] = useState<TabKey>("stats");
@@ -15,8 +17,8 @@ export default function App() {
       <div className="max-w-6xl mx-auto mt-6 bg-white rounded-lg shadow-sm overflow-hidden">
         <TabNav active={active} onChange={setActive} />
         <div className="p-6">
-          {active === "stats" && <PlaceholderTab name="Stats" />}
-          {active === "databases" && <PlaceholderTab name="Databases" />}
+          {active === "stats" && <StatsTab />}
+          {active === "databases" && <DatabasesTab />}
           {active === "chats" && <PlaceholderTab name="Chats" />}
           {active === "messages" && <PlaceholderTab name="Messages" />}
           {active === "users" && <PlaceholderTab name="Users" />}
