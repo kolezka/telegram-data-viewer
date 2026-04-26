@@ -71,12 +71,16 @@ class MessagesPage(BaseModel):
 
 
 class MediaItem(BaseModel):
-    model_config = ConfigDict(extra="allow")
     filename: str = ""
     mime_type: str = ""
     media_type: str = ""
     account: str = ""
     linked_message: dict[str, Any] | None = None
+    thumbnail: str | None = None
+    size: int | None = None
+    width: int | None = None
+    height: int | None = None
+    duration: float | None = None
 
 
 class MediaPage(BaseModel):
@@ -103,7 +107,6 @@ class Stats(BaseModel):
 
 
 class ExportData(BaseModel):
-    model_config = ConfigDict(extra="allow")
     accounts: list[Any] = []
     databases: dict[str, Any] = {}
     media_files: list[Any] = []
