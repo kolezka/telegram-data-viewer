@@ -181,7 +181,7 @@ export interface components {
             /** Message Count */
             message_count: number;
             /** Last Message */
-            last_message?: number | null;
+            last_message?: number | string | null;
             /** Databases */
             databases: string[];
         };
@@ -318,7 +318,7 @@ export interface components {
             /** Peer Id */
             peer_id?: number | string | null;
             /** Timestamp */
-            timestamp?: number | null;
+            timestamp?: number | string | null;
             /** Outgoing */
             outgoing?: boolean | null;
         } & {

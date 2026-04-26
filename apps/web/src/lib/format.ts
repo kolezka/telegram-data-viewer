@@ -1,6 +1,14 @@
-export function formatTimestamp(ts: number | null | undefined): string {
-  if (!ts) return "—";
-  const d = new Date(ts * 1000);
+/**
+ * Render a timestamp from the API. The parser emits two shapes for the same
+ * field across different files:
+ *  - numeric Unix seconds (e.g. messages.json `timestamp: 1700000010`)
+ *  - ISO 8601 string (e.g. conversations_index.json `last_message: "2026-04-25T23:24:23+00:00"`)
+ * Accept both.
+ */
+export function formatTimestamp(ts: number | string | null | undefined): string {
+  if (ts === null || ts === undefined || ts === "" || ts === 0) return "—";
+  const d = typeof ts === "string" ? new Date(ts) : new Date(ts * 1000);
+  if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleString();
 }
 

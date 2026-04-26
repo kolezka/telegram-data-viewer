@@ -202,7 +202,9 @@ run_decrypt() {
     [[ "${TG_REDACT:-0}" == "1" ]] && redact_arg=(--redact)
 
     log "Decrypting databases in: $(_redact_path "$backup_dir")"
-    (cd "$SCRIPT_DIR/apps" && python3 -m tool.tg_appstore_decrypt "$backup_dir" "${redact_arg[@]+"${redact_arg[@]}"}")
+    local abs_backup_dir
+    abs_backup_dir="$(cd "$backup_dir" && pwd)"
+    (cd "$SCRIPT_DIR/apps" && python3 -m tool.tg_appstore_decrypt "$abs_backup_dir" "${redact_arg[@]+"${redact_arg[@]}"}")
 }
 
 run_parse() {
@@ -218,7 +220,9 @@ run_parse() {
     [[ "${TG_REDACT:-0}" == "1" ]] && redact_arg=(--redact)
 
     log "Parsing messages, peers, and conversations in: $(_redact_path "$backup_dir")"
-    (cd "$SCRIPT_DIR/apps" && python3 -m tool.postbox_parser "$backup_dir" "${redact_arg[@]+"${redact_arg[@]}"}")
+    local abs_backup_dir
+    abs_backup_dir="$(cd "$backup_dir" && pwd)"
+    (cd "$SCRIPT_DIR/apps" && python3 -m tool.postbox_parser "$abs_backup_dir" "${redact_arg[@]+"${redact_arg[@]}"}")
 }
 
 run_webui() {

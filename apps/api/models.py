@@ -50,7 +50,10 @@ class Chat(BaseModel):
     type: str
     has_fts: bool
     message_count: int
-    last_message: int | float | None = None
+    # The parser may emit ISO-8601 strings (e.g. "2026-04-25T23:24:23+00:00")
+    # OR numeric Unix timestamps. Accept both; the frontend normalises in
+    # formatTimestamp().
+    last_message: int | float | str | None = None
     databases: list[str]
 
 
@@ -58,7 +61,8 @@ class Message(BaseModel):
     model_config = ConfigDict(extra="allow")
     text: str = ""
     peer_id: int | str | None = None
-    timestamp: int | float | None = None
+    # Same heterogeneity as Chat.last_message — parser may emit a string or number.
+    timestamp: int | float | str | None = None
     outgoing: bool | None = None
 
 
