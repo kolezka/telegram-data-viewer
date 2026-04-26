@@ -10,7 +10,7 @@ BACKUP_SCRIPT="$SCRIPT_DIR/extract/tg-backup.sh"
 EXTRACT_SCRIPT="$SCRIPT_DIR/extract/extract-keys.sh"
 APPSTORE_DECRYPT_SCRIPT="$SCRIPT_DIR/extract/tg_appstore_decrypt.py"
 POSTBOX_PARSER_SCRIPT="$SCRIPT_DIR/extract/postbox_parser.py"
-WEBUI_SCRIPT_DIR="$SCRIPT_DIR/webui"
+WEBUI_SCRIPT_DIR="$SCRIPT_DIR/api/webui"
 REQUIREMENTS_FILE="$SCRIPT_DIR/requirements.txt"
 
 # ── Colors ────────────────────────────────────────────────────────────────────
@@ -214,7 +214,7 @@ run_webui() {
     log "Data directory: $(_redact_path "$abs_data_dir")"
     log "URL: http://$host:$port"
 
-    (cd "$SCRIPT_DIR" && python3 -m webui "$abs_data_dir" --host "$host" --port "$port")
+    (cd "$SCRIPT_DIR/api" && python3 -m webui "$abs_data_dir" --host "$host" --port "$port")
 }
 
 run_clean() {

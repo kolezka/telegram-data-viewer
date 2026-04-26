@@ -185,7 +185,7 @@ def step_webui(data_dir: Path, port: int):
 
     subprocess.run(
         [sys.executable, "-m", "webui", str(data_dir), "--port", str(port)],
-        cwd=Path(__file__).parent,
+        cwd=Path(__file__).parent / "api",
     )
 
 
