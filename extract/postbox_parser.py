@@ -23,7 +23,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, Tuple
 
-import redact
+from . import redact
 
 
 def parse_peer_from_t2(key: int, value: bytes) -> Optional[Dict[str, Any]]:
@@ -883,7 +883,7 @@ def main():
         db_salt = bytes.fromhex(args.db_salt)
     else:
         # Import decrypt function from tg_appstore_decrypt
-        from tg_appstore_decrypt import decrypt_tempkey
+        from .tg_appstore_decrypt import decrypt_tempkey
 
         tempkey_path = args.tempkey
         if not tempkey_path:
