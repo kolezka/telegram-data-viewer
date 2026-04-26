@@ -7,13 +7,15 @@ from pathlib import Path
 import pytest
 
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-FIXTURE_DIR = REPO_ROOT / "tests" / "fixtures" / "mini-parsed"
+# api/tests/conftest.py → parents: api/tests/, api/, <repo root>
+API_DIR = Path(__file__).resolve().parent.parent
+REPO_ROOT = API_DIR.parent
+FIXTURE_DIR = API_DIR / "tests" / "fixtures" / "mini-parsed"
 
-# Ensure the repo root is on sys.path so `import webui` and `import webui as old`
-# both resolve regardless of pytest's rootdir.
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+# Make `webui` importable from api/, and `extract` importable from repo root.
+for path in (str(API_DIR), str(REPO_ROOT)):
+    if path not in sys.path:
+        sys.path.insert(0, path)
 
 
 @pytest.fixture
