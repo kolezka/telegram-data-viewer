@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMessages } from "../api/queries";
 import type { Schemas } from "../api/client";
 import { formatTimestamp } from "../lib/format";
+import { useModal } from "../lib/useModal";
 import MediaTile from "./MediaTile";
 
 interface Props {
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export default function ChatModal({ chat, onClose }: Props) {
+  useModal(onClose);
   const [page, setPage] = useState(1);
   const peerIds = chat.all_peer_ids.join(",");
   const { data, isLoading, error } = useMessages({
