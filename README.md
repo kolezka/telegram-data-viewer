@@ -37,10 +37,11 @@ flowchart LR
 ## Quick start
 
 ```bash
-# 1. Install dependencies
-pip install -r requirements.txt
+# 1. One-shot setup: creates .venv/, installs Python + Bun deps, builds the frontend
+./tg-viewer setup
+source .venv/bin/activate
 
-# 2. Full automated workflow (backup + decrypt + parse + web UI)
+# 2. Full pipeline: backup → decrypt → parse → web UI on http://127.0.0.1:5000
 ./tg-viewer full
 
 # 3. Clean up when done
@@ -48,6 +49,12 @@ pip install -r requirements.txt
 ```
 
 > Quit Telegram before running backup to avoid database locks.
+
+`./tg-viewer setup` handles everything: a project-local `.venv/` for the
+Python backend (`apps/api`) and extraction tool (`apps/tool`), plus
+`bun install && bun run build` for the React frontend (`apps/web`).
+On a fresh clone you only need Python 3.11+, Bun, and a working Telegram
+install — `setup` does the rest.
 
 ## Commands
 
@@ -59,7 +66,7 @@ pip install -r requirements.txt
 | `./tg-viewer parse DIR` | Parse Postbox binary format into messages/peers/conversations |
 | `./tg-viewer webui DIR` | Start web UI to browse parsed data |
 | `./tg-viewer clean` | Remove all backup, decrypted, and parsed data |
-| `./tg-viewer setup` | Install Python dependencies |
+| `./tg-viewer setup` | Create `.venv/`, install Python + Bun deps, build the frontend |
 
 ## Web UI
 

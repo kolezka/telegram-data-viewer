@@ -100,21 +100,35 @@ check_dependencies() {
 
 setup_dependencies() {
     title "Setting up dependencies"
-    
+
     # Check Python
     if ! command -v python3 &>/dev/null; then
         die "Python 3 is required. Please install Python 3 first."
     fi
-    
-    # Install Python packages
+
+    # Install Python packages. Prefer a project-local virtualenv so PEP 668
+    # (Homebrew / Linux distro externally-managed environments) doesn't block
+    # the install. If a venv already exists or the user has a different
+    # workflow active (e.g. conda), respect it.
     if [[ -f "$REQUIREMENTS_FILE" ]]; then
-        log "Installing Python dependencies..."
-        python3 -m pip install -r "$REQUIREMENTS_FILE"
-        ok "Python dependencies installed"
+        local pip_target=("python3" "-m" "pip" "install" "-r" "$REQUIREMENTS_FILE")
+        if [[ -n "${VIRTUAL_ENV:-}" || -n "${CONDA_PREFIX:-}" ]]; then
+            log "Installing Python deps into active env: ${VIRTUAL_ENV:-$CONDA_PREFIX}"
+            "${pip_target[@]}"
+        else
+            if [[ ! -d "$SCRIPT_DIR/.venv" ]]; then
+                log "Creating project virtualenv at .venv/"
+                python3 -m venv "$SCRIPT_DIR/.venv" || die "Could not create .venv (install python3-venv?)"
+            fi
+            log "Installing Python (api + tool) dependencies into .venv/"
+            "$SCRIPT_DIR/.venv/bin/python" -m pip install --upgrade pip >/dev/null
+            "$SCRIPT_DIR/.venv/bin/python" -m pip install -r "$REQUIREMENTS_FILE"
+            ok "Python deps installed in .venv/ — activate with: source .venv/bin/activate"
+        fi
     else
         warn "Requirements file not found: $REQUIREMENTS_FILE"
     fi
-    
+
     # Make scripts executable
     for script in "$BACKUP_SCRIPT" "$EXTRACT_SCRIPT" "$APPSTORE_DECRYPT_SCRIPT" "$POSTBOX_PARSER_SCRIPT"; do
         if [[ -f "$script" ]]; then
@@ -122,7 +136,22 @@ setup_dependencies() {
             log "Made executable: $(basename "$script")"
         fi
     done
-    
+
+    # Frontend: install Bun deps + build the production bundle, so that
+    # `./tg-viewer webui` works on first run without an extra build step.
+    if [[ -d "$SCRIPT_DIR/apps/web" ]]; then
+        if command -v bun &>/dev/null; then
+            log "Installing frontend (apps/web) dependencies..."
+            (cd "$SCRIPT_DIR/apps/web" && bun install) || die "bun install failed"
+            log "Building frontend bundle (apps/web/dist)..."
+            (cd "$SCRIPT_DIR/apps/web" && bun run build) || die "bun run build failed"
+            ok "Frontend installed and built"
+        else
+            warn "Bun not found — skipping frontend install. Install from https://bun.sh, then re-run setup."
+            warn "(./tg-viewer webui will also auto-build on first run if Bun is available.)"
+        fi
+    fi
+
     ok "Setup complete!"
 }
 
