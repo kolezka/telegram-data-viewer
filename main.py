@@ -183,7 +183,7 @@ def step_webui(data_dir: Path, port: int):
     print(f"  Press Ctrl+C to stop\n")
 
     subprocess.run(
-        [sys.executable, "webui.py", str(data_dir), "--port", str(port)],
+        [sys.executable, "webui_flask.py", str(data_dir), "--port", str(port)],
         cwd=Path(__file__).parent,
     )
 
