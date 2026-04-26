@@ -13,7 +13,7 @@ Common failure modes when running `tg-viewer` and how to resolve them.
 <details>
 <summary><b>No keys found in keychain</b></summary>
 
-- For App Store version: keys are in `.tempkeyEncrypted`, not keychain. Use `extract/tg_appstore_decrypt.py`
+- For App Store version: keys are in `.tempkeyEncrypted`, not keychain. Use `apps/tool/tg_appstore_decrypt.py`
 - For Desktop version: check `key_data` file in tdata directory
 
 </details>
@@ -28,6 +28,6 @@ Common failure modes when running `tg-viewer` and how to resolve them.
 <details>
 <summary><b>Custom passcode set</b></summary>
 
-- Pass it as an argument: `python3 extract/tg_appstore_decrypt.py ./data --password "your_passcode"`
+- Pass it as an argument: `(cd apps && python3 -m tool.tg_appstore_decrypt ../data --password "your_passcode")`
 
 </details>

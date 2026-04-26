@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Request
 
-from webui.models import ExportData
+from api.models import ExportData
 
 router = APIRouter(prefix="/api", tags=["export"])
 

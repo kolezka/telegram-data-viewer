@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Request
 
-from webui.chats_logic import compute_chats
-from webui.models import Stats, StatsDb
+from api.chats_logic import compute_chats
+from api.models import Stats, StatsDb
 
 router = APIRouter(prefix="/api", tags=["stats"])
 

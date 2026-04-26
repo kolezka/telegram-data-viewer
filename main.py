@@ -57,7 +57,7 @@ def step_backup(dest: Path) -> Path:
         print(f"ERROR: Telegram App Store data not found at {TG_APPSTORE}")
         sys.exit(1)
 
-    script = Path(__file__).parent / "tg-backup.sh"
+    script = Path(__file__).parent / "apps" / "tool" / "tg-backup.sh"
     if not script.exists():
         print(f"ERROR: {script} not found")
         sys.exit(1)
@@ -85,7 +85,7 @@ def step_decrypt(backup_dir: Path, password: str) -> tuple:
     """Decrypt .tempkeyEncrypted and return (db_key, db_salt)."""
     print("\n=== Step 2: Decrypt encryption key ===")
 
-    from extract.tg_appstore_decrypt import decrypt_tempkey
+    from tool.tg_appstore_decrypt import decrypt_tempkey
 
     tempkey_path = None
     for candidate in [
@@ -146,7 +146,7 @@ def step_parse(backup_dir: Path, databases: list, output_dir: Path) -> dict:
     """Parse messages from all databases."""
     print("\n=== Step 4: Parse messages ===")
 
-    from extract.postbox_parser import (
+    from tool.postbox_parser import (
         parse_peer_from_t2,
         parse_messages_from_t7,
         parse_messages_from_fts,
@@ -184,8 +184,8 @@ def step_webui(data_dir: Path, port: int):
     print(f"  Press Ctrl+C to stop\n")
 
     subprocess.run(
-        [sys.executable, "-m", "webui", str(data_dir), "--port", str(port)],
-        cwd=Path(__file__).parent / "api",
+        [sys.executable, "-m", "api", str(data_dir), "--port", str(port)],
+        cwd=Path(__file__).parent / "apps",
     )
 
 

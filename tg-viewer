@@ -6,11 +6,11 @@ set -euo pipefail
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BACKUP_SCRIPT="$SCRIPT_DIR/extract/tg-backup.sh"
-EXTRACT_SCRIPT="$SCRIPT_DIR/extract/extract-keys.sh"
-APPSTORE_DECRYPT_SCRIPT="$SCRIPT_DIR/extract/tg_appstore_decrypt.py"
-POSTBOX_PARSER_SCRIPT="$SCRIPT_DIR/extract/postbox_parser.py"
-WEBUI_SCRIPT_DIR="$SCRIPT_DIR/api/webui"
+BACKUP_SCRIPT="$SCRIPT_DIR/apps/tool/tg-backup.sh"
+EXTRACT_SCRIPT="$SCRIPT_DIR/apps/tool/extract-keys.sh"
+APPSTORE_DECRYPT_SCRIPT="$SCRIPT_DIR/apps/tool/tg_appstore_decrypt.py"
+POSTBOX_PARSER_SCRIPT="$SCRIPT_DIR/apps/tool/postbox_parser.py"
+WEBUI_SCRIPT_DIR="$SCRIPT_DIR/apps/api"
 REQUIREMENTS_FILE="$SCRIPT_DIR/requirements.txt"
 
 # ── Colors ────────────────────────────────────────────────────────────────────
@@ -86,7 +86,7 @@ check_dependencies() {
     for script in "$BACKUP_SCRIPT" "$APPSTORE_DECRYPT_SCRIPT" "$POSTBOX_PARSER_SCRIPT"; do
         [[ -f "$script" ]] || missing+=("$(basename "$script")")
     done
-    [[ -d "$WEBUI_SCRIPT_DIR" ]] || missing+=("webui/")
+    [[ -d "$WEBUI_SCRIPT_DIR" ]] || missing+=("apps/api/")
     
     # Check Python
     if ! command -v python3 &>/dev/null; then
@@ -173,7 +173,7 @@ run_decrypt() {
     [[ "${TG_REDACT:-0}" == "1" ]] && redact_arg=(--redact)
 
     log "Decrypting databases in: $(_redact_path "$backup_dir")"
-    (cd "$SCRIPT_DIR" && python3 -m extract.tg_appstore_decrypt "$backup_dir" "${redact_arg[@]+"${redact_arg[@]}"}")
+    (cd "$SCRIPT_DIR/apps" && python3 -m tool.tg_appstore_decrypt "$backup_dir" "${redact_arg[@]+"${redact_arg[@]}"}")
 }
 
 run_parse() {
@@ -189,7 +189,7 @@ run_parse() {
     [[ "${TG_REDACT:-0}" == "1" ]] && redact_arg=(--redact)
 
     log "Parsing messages, peers, and conversations in: $(_redact_path "$backup_dir")"
-    (cd "$SCRIPT_DIR" && python3 -m extract.postbox_parser "$backup_dir" "${redact_arg[@]+"${redact_arg[@]}"}")
+    (cd "$SCRIPT_DIR/apps" && python3 -m tool.postbox_parser "$backup_dir" "${redact_arg[@]+"${redact_arg[@]}"}")
 }
 
 run_webui() {
@@ -208,12 +208,12 @@ run_webui() {
     fi
 
     # Build the React frontend if it hasn't been built yet
-    if [[ ! -d "$SCRIPT_DIR/web/dist" ]]; then
-        log "Building frontend (web/dist/ not found)..."
+    if [[ ! -d "$SCRIPT_DIR/apps/web/dist" ]]; then
+        log "Building frontend (apps/web/dist/ not found)..."
         if ! command -v bun >/dev/null 2>&1; then
             die "bun is required but not found in PATH. Install from https://bun.sh"
         fi
-        (cd "$SCRIPT_DIR/web" && bun install && bun run build) || die "Frontend build failed"
+        (cd "$SCRIPT_DIR/apps/web" && bun install && bun run build) || die "Frontend build failed"
     fi
 
     # Resolve to absolute path so the subshell `cd "$SCRIPT_DIR"` doesn't break a relative data_dir
@@ -224,7 +224,7 @@ run_webui() {
     log "Data directory: $(_redact_path "$abs_data_dir")"
     log "URL: http://$host:$port"
 
-    (cd "$SCRIPT_DIR/api" && python3 -m webui "$abs_data_dir" --host "$host" --port "$port")
+    (cd "$SCRIPT_DIR/apps" && python3 -m api "$abs_data_dir" --host "$host" --port "$port")
 }
 
 run_dev() {
@@ -233,15 +233,15 @@ run_dev() {
     title "Dev stack: FastAPI (5000) + Bun (5173)"
 
     [[ -d "$data_dir" ]] || die "Data directory not found: $data_dir"
-    [[ -d "$SCRIPT_DIR/web" ]] || die "web/ workspace not found at $SCRIPT_DIR/web"
+    [[ -d "$SCRIPT_DIR/apps/web" ]] || die "apps/web/ workspace not found at $SCRIPT_DIR/apps/web"
 
     if ! command -v bun >/dev/null 2>&1; then
         die "bun is required but not found in PATH. Install from https://bun.sh"
     fi
 
-    if [[ ! -d "$SCRIPT_DIR/web/node_modules" ]]; then
+    if [[ ! -d "$SCRIPT_DIR/apps/web/node_modules" ]]; then
         log "Installing frontend dependencies..."
-        (cd "$SCRIPT_DIR/web" && bun install) || die "bun install failed"
+        (cd "$SCRIPT_DIR/apps/web" && bun install) || die "bun install failed"
     fi
 
     local abs_data_dir
@@ -252,16 +252,16 @@ run_dev() {
     log "Press Ctrl+C to stop both"
 
     # Start FastAPI in background
-    (cd "$SCRIPT_DIR/api" && python3 -m webui "$abs_data_dir" --port 5000) &
+    (cd "$SCRIPT_DIR/apps" && python3 -m api "$abs_data_dir" --port 5000) &
     local api_pid=$!
 
     # Start Tailwind watcher in background
-    (cd "$SCRIPT_DIR/web" && bun run css:watch) &
+    (cd "$SCRIPT_DIR/apps/web" && bun run css:watch) &
     local css_pid=$!
 
     # Foreground: Bun dev server (Ctrl+C kills group)
     trap "kill $api_pid $css_pid 2>/dev/null; exit" INT TERM
-    (cd "$SCRIPT_DIR/web" && bun run dev)
+    (cd "$SCRIPT_DIR/apps/web" && bun run dev)
 
     kill "$api_pid" "$css_pid" 2>/dev/null
 }

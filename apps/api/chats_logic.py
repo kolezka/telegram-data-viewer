@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from webui.peer import peer_type
-from webui.state import AppState
+from api.peer import peer_type
+from api.state import AppState
 
 
 def compute_chats(

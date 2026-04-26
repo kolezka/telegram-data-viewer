@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Query, Request
 
-from webui.models import User, UsersPage
+from api.models import User, UsersPage
 
 router = APIRouter(prefix="/api", tags=["users"])
 

@@ -7,26 +7,26 @@ Telegram data extraction, decryption, and visualization toolkit for macOS. Extra
 ## Architecture
 
 ```
-extract/tg-backup.sh → extract/tg_appstore_decrypt.py → extract/postbox_parser.py → python -m webui (in api/)
+apps/tool/tg-backup.sh → apps/tool/tg_appstore_decrypt.py → apps/tool/postbox_parser.py → python -m api (in apps/)
 ```
 
 `tg-viewer` orchestrates this pipeline. It decrypts `.tempkeyEncrypted` (AES-CBC with SHA-512 of password), opens SQLCipher with `PRAGMA cipher_default_plaintext_header_size = 32`, and parses Postbox binary format from tables t2 (peers) and t7 (messages).
 
-Legacy pipeline (`extract/extract-keys.sh` + `extract/tg_decrypt.py`) still exists but is not used by `tg-viewer`.
+Legacy pipeline (`apps/tool/extract-keys.sh` + `apps/tool/tg_decrypt.py`) still exists but is not used by `tg-viewer`.
 
 ## Key files
 
 | File | Purpose |
 |------|---------|
 | `tg-viewer` | CLI orchestrator (bash) — `full`, `backup`, `decrypt`, `parse`, `webui`, `clean` |
-| `extract/tg-backup.sh` | Backup Telegram data from macOS (supports `--batch` for non-interactive use) |
-| `extract/tg_appstore_decrypt.py` | Decrypt .tempkeyEncrypted + open SQLCipher databases |
-| `extract/postbox_parser.py` | Parse Postbox binary format, extract messages/peers/conversations |
-| `extract/redact.py` | Console output redaction helpers |
-| `api/webui/` | FastAPI backend package — `python -m webui` (with `cwd=api/`); mounts `web/dist/` via StaticFiles |
-| `web/` | React + Bun frontend (TanStack Query, Tailwind, OpenAPI codegen) — `bun run dev` for HMR; `bun run build` → `web/dist/` |
-| `extract/extract-keys.sh` | Extract keys from Keychain (legacy) |
-| `extract/tg_decrypt.py` | Legacy decryptor (tries multiple key formats) |
+| `apps/tool/tg-backup.sh` | Backup Telegram data from macOS (supports `--batch` for non-interactive use) |
+| `apps/tool/tg_appstore_decrypt.py` | Decrypt .tempkeyEncrypted + open SQLCipher databases |
+| `apps/tool/postbox_parser.py` | Parse Postbox binary format, extract messages/peers/conversations |
+| `apps/tool/redact.py` | Console output redaction helpers |
+| `apps/api/` | FastAPI backend package — `python -m api` (with `cwd=apps/`); mounts `apps/web/dist/` via StaticFiles |
+| `apps/web/` | React + Bun frontend (TanStack Query, Tailwind, OpenAPI codegen) — `bun run dev` for HMR; `bun run build` → `apps/web/dist/` |
+| `apps/tool/extract-keys.sh` | Extract keys from Keychain (legacy) |
+| `apps/tool/tg_decrypt.py` | Legacy decryptor (tries multiple key formats) |
 
 ## Development commands
 

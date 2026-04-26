@@ -6,22 +6,22 @@ How `tg-viewer` is laid out internally — subsystems, scripts, decryption flow,
 
 The codebase is organised into three subsystems:
 
-- `extract/` — backup + decryption + Postbox parsing (Python + bash)
-- `api/` — FastAPI backend package and transitional templates
-- `web/` — Phase 2b React + Bun frontend (placeholder)
+- `apps/tool/` — backup + decryption + Postbox parsing (Python + bash)
+- `apps/api/` — FastAPI backend package
+- `apps/web/` — React + Bun frontend (built to `apps/web/dist/`)
 
 ## Scripts
 
 | File | Purpose |
 |------|---------|
 | `tg-viewer` | CLI orchestrator — runs the full pipeline or individual steps |
-| `extract/tg-backup.sh` | Copies Telegram data from App Store / Desktop / Standalone |
-| `extract/tg_appstore_decrypt.py` | Decrypts `.tempkeyEncrypted` and opens SQLCipher databases |
-| `extract/postbox_parser.py` | Parses Postbox binary format — extracts messages, peers, conversations from t2/t7/ft41 |
-| `api/webui/` | FastAPI web UI package for browsing messages (entrypoint: `python -m webui`, run with `cwd=api/`) |
-| `web/` | React + Bun frontend — built to `web/dist/` and served by FastAPI's StaticFiles |
-| `extract/extract-keys.sh` | Extracts encryption keys from macOS Keychain (legacy) |
-| `extract/tg_decrypt.py` | Legacy decryptor — tries multiple key formats via sqlcipher3 |
+| `apps/tool/tg-backup.sh` | Copies Telegram data from App Store / Desktop / Standalone |
+| `apps/tool/tg_appstore_decrypt.py` | Decrypts `.tempkeyEncrypted` and opens SQLCipher databases |
+| `apps/tool/postbox_parser.py` | Parses Postbox binary format — extracts messages, peers, conversations from t2/t7/ft41 |
+| `apps/api/` | FastAPI backend package for browsing messages (entrypoint: `python -m api`, run with `cwd=apps/`) |
+| `apps/web/` | React + Bun frontend — built to `apps/web/dist/` and served by FastAPI's StaticFiles |
+| `apps/tool/extract-keys.sh` | Extracts encryption keys from macOS Keychain (legacy) |
+| `apps/tool/tg_decrypt.py` | Legacy decryptor — tries multiple key formats via sqlcipher3 |
 
 ## Decryption flow
 

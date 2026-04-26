@@ -5,7 +5,7 @@ from typing import Any
 
 from fastapi import APIRouter, Query, Request
 
-from webui.models import Message, MessagesPage
+from api.models import Message, MessagesPage
 
 router = APIRouter(prefix="/api", tags=["messages"])
 

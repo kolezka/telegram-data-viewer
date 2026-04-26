@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request
 
-from webui.models import DatabaseDetail, DatabaseSummary
+from api.models import DatabaseDetail, DatabaseSummary
 
 router = APIRouter(prefix="/api", tags=["databases"])
 

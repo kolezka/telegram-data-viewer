@@ -1,4 +1,4 @@
-"""CLI entry: `python -m webui <data_dir> --host --port`."""
+"""CLI entry: `python -m api <data_dir> --host --port`."""
 from __future__ import annotations
 
 import argparse
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import uvicorn
 
-from webui.app import create_app
+from api.app import create_app
 
 
 def main() -> None:
