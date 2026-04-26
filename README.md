@@ -436,4 +436,4 @@ Videos in the Media grid render their first-frame thumbnail (via `<video preload
 
 ## License
 
-Private and proprietary.
+MIT — see [LICENSE](LICENSE).

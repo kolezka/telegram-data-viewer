@@ -49,6 +49,9 @@ Thumbs.db
 .claude/
 .worktrees/
 
+# Playwright MCP cache
+.playwright-mcp/
+
 # Environment
 .env
 .env.*
