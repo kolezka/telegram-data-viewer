@@ -274,7 +274,7 @@ The codebase is organised into three subsystems:
 | `extract/tg_appstore_decrypt.py` | Decrypts `.tempkeyEncrypted` and opens SQLCipher databases |
 | `extract/postbox_parser.py` | Parses Postbox binary format — extracts messages, peers, conversations from t2/t7/ft41 |
 | `api/webui/` | FastAPI web UI package for browsing messages (entrypoint: `python -m webui`, run with `cwd=api/`) |
-| `api/templates/index.html` | Transitional inline-JS frontend (replaced by `web/` in Phase 2b) |
+| `web/` | React + Bun frontend — built to `web/dist/` and served by FastAPI's StaticFiles |
 | `extract/extract-keys.sh` | Extracts encryption keys from macOS Keychain (legacy) |
 | `extract/tg_decrypt.py` | Legacy decryptor — tries multiple key formats via sqlcipher3 |
 

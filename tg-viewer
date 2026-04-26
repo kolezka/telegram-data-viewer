@@ -44,6 +44,7 @@ COMMANDS:
     decrypt DIR         Decrypt databases (App Store .tempkeyEncrypted)
     parse DIR           Parse Postbox binary format → messages/peers/conversations
     webui DIR           Start web UI to visualize parsed data
+    dev DIR             Start dev stack (FastAPI on 5000 + Bun on 5173 with proxy)
     full [DIR]          Run complete workflow: backup → decrypt → parse → webui
     clean               Remove all backup, decrypted, and parsed data
     setup               Install Python dependencies
@@ -206,6 +207,15 @@ run_webui() {
         die "Data directory not found: $data_dir"
     fi
 
+    # Build the React frontend if it hasn't been built yet
+    if [[ ! -d "$SCRIPT_DIR/web/dist" ]]; then
+        log "Building frontend (web/dist/ not found)..."
+        if ! command -v bun >/dev/null 2>&1; then
+            die "bun is required but not found in PATH. Install from https://bun.sh"
+        fi
+        (cd "$SCRIPT_DIR/web" && bun install && bun run build) || die "Frontend build failed"
+    fi
+
     # Resolve to absolute path so the subshell `cd "$SCRIPT_DIR"` doesn't break a relative data_dir
     local abs_data_dir
     abs_data_dir="$(cd "$data_dir" && pwd)"
@@ -215,6 +225,45 @@ run_webui() {
     log "URL: http://$host:$port"
 
     (cd "$SCRIPT_DIR/api" && python3 -m webui "$abs_data_dir" --host "$host" --port "$port")
+}
+
+run_dev() {
+    local data_dir="$1"
+
+    title "Dev stack: FastAPI (5000) + Bun (5173)"
+
+    [[ -d "$data_dir" ]] || die "Data directory not found: $data_dir"
+    [[ -d "$SCRIPT_DIR/web" ]] || die "web/ workspace not found at $SCRIPT_DIR/web"
+
+    if ! command -v bun >/dev/null 2>&1; then
+        die "bun is required but not found in PATH. Install from https://bun.sh"
+    fi
+
+    if [[ ! -d "$SCRIPT_DIR/web/node_modules" ]]; then
+        log "Installing frontend dependencies..."
+        (cd "$SCRIPT_DIR/web" && bun install) || die "bun install failed"
+    fi
+
+    local abs_data_dir
+    abs_data_dir="$(cd "$data_dir" && pwd)"
+
+    log "FastAPI:  http://127.0.0.1:5000"
+    log "Bun dev:  http://127.0.0.1:5173 (proxies API to FastAPI)"
+    log "Press Ctrl+C to stop both"
+
+    # Start FastAPI in background
+    (cd "$SCRIPT_DIR/api" && python3 -m webui "$abs_data_dir" --port 5000) &
+    local api_pid=$!
+
+    # Start Tailwind watcher in background
+    (cd "$SCRIPT_DIR/web" && bun run css:watch) &
+    local css_pid=$!
+
+    # Foreground: Bun dev server (Ctrl+C kills group)
+    trap "kill $api_pid $css_pid 2>/dev/null; exit" INT TERM
+    (cd "$SCRIPT_DIR/web" && bun run dev)
+
+    kill "$api_pid" "$css_pid" 2>/dev/null
 }
 
 run_clean() {
@@ -372,6 +421,11 @@ main() {
             check_dependencies
             [[ -n "${2:-}" ]] || die "Usage: $0 webui <data_dir>"
             run_webui "$2" "$port" "$host"
+            ;;
+        dev)
+            check_dependencies
+            [[ -n "${2:-}" ]] || die "Usage: $0 dev <data_dir>"
+            run_dev "$2"
             ;;
         full)
             check_dependencies

@@ -23,9 +23,8 @@ Legacy pipeline (`extract/extract-keys.sh` + `extract/tg_decrypt.py`) still exis
 | `extract/tg_appstore_decrypt.py` | Decrypt .tempkeyEncrypted + open SQLCipher databases |
 | `extract/postbox_parser.py` | Parse Postbox binary format, extract messages/peers/conversations |
 | `extract/redact.py` | Console output redaction helpers |
-| `api/webui/` | FastAPI backend package — `python -m webui` (with `cwd=api/`) |
-| `api/templates/index.html` | Transitional inline-JS frontend (deleted in Phase 2b) |
-| `web/` | Phase 2b React + Bun frontend (placeholder for now) |
+| `api/webui/` | FastAPI backend package — `python -m webui` (with `cwd=api/`); mounts `web/dist/` via StaticFiles |
+| `web/` | React + Bun frontend (TanStack Query, Tailwind, OpenAPI codegen) — `bun run dev` for HMR; `bun run build` → `web/dist/` |
 | `extract/extract-keys.sh` | Extract keys from Keychain (legacy) |
 | `extract/tg_decrypt.py` | Legacy decryptor (tries multiple key formats) |
 

@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .conv-bubble {
+    @apply px-3 py-2 mb-1 rounded-xl max-w-[80%] break-words shadow-sm;
+  }
+  .conv-bubble-incoming {
+    @apply bg-tg-incoming self-start rounded-bl-sm;
+  }
+  .conv-bubble-outgoing {
+    @apply bg-tg-outgoing self-end rounded-br-sm;
+  }
+  .conv-bubble-unknown {
+    @apply bg-tg-unknown self-center border border-dashed border-yellow-600 max-w-[70%];
+  }
+}

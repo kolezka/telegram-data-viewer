@@ -5,9 +5,13 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from webui.loader import load_telegram_data
 from webui.state import AppState
+
+
+WEB_DIST = Path(__file__).resolve().parent.parent.parent / "web" / "dist"
 
 
 def create_app(data_dir: str | Path | None = None) -> FastAPI:
@@ -32,20 +36,41 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
         lifespan=lifespan,
     )
 
-    from webui.routers import pages
-    app.include_router(pages.router)
-    from webui.routers import databases
+    # API routers FIRST. The order matters because StaticFiles(html=True) below
+    # is a catch-all that swallows any unmatched path.
+    from webui.routers import databases, users, chats, messages, media, stats, export_data
     app.include_router(databases.router)
-    from webui.routers import users
     app.include_router(users.router)
-    from webui.routers import chats
     app.include_router(chats.router)
-    from webui.routers import messages
     app.include_router(messages.router)
-    from webui.routers import media
     app.include_router(media.router)
-    from webui.routers import stats
     app.include_router(stats.router)
-    from webui.routers import export_data
     app.include_router(export_data.router)
+
+    # Mount the React bundle at /. If web/dist/ is missing (e.g., in a fresh
+    # CI checkout or direct `python -m webui` without a build), surface a clear
+    # message at / instead of FastAPI's default 404 — the API itself still works.
+    if WEB_DIST.is_dir():
+        app.mount("/", StaticFiles(directory=str(WEB_DIST), html=True), name="webdist")
+    else:
+        from fastapi.responses import HTMLResponse
+
+        @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+        def _frontend_missing() -> HTMLResponse:
+            return HTMLResponse(
+                """<!doctype html><meta charset="utf-8">
+<title>tg-viewer — frontend not built</title>
+<style>body{font:14px system-ui;margin:40px;max-width:640px}code{background:#f4f4f4;padding:2px 6px;border-radius:3px}</style>
+<h1>Frontend not built</h1>
+<p>The React bundle at <code>web/dist/</code> doesn't exist yet.</p>
+<p>Run one of:</p>
+<ul>
+  <li><code>./tg-viewer webui &lt;DIR&gt;</code> — auto-installs Bun deps and builds.</li>
+  <li><code>cd web &amp;&amp; bun install &amp;&amp; bun run build</code> — manual build.</li>
+</ul>
+<p>The API itself is up — try <a href="/docs">/docs</a> or <a href="/api/stats">/api/stats</a>.</p>
+""",
+                status_code=503,
+            )
+
     return app
