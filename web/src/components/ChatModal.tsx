@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useMessages } from "../api/queries";
 import type { Schemas } from "../api/client";
 import { formatTimestamp } from "../lib/format";
@@ -8,10 +9,12 @@ interface Props {
 }
 
 export default function ChatModal({ chat, onClose }: Props) {
+  const [page, setPage] = useState(1);
   const peerIds = chat.all_peer_ids.join(",");
   const { data, isLoading, error } = useMessages({
     peer_id: peerIds,
-    per_page: 200,
+    per_page: 50,
+    page,
   });
 
   return (
@@ -40,10 +43,10 @@ export default function ChatModal({ chat, onClose }: Props) {
           {error && <div className="text-red-600">Error: {(error as Error).message}</div>}
           {data?.messages
             .slice()
-            .reverse() // backend returns newest first; flip to chronological
+            .reverse() // backend returns newest first; flip to chronological per page
             .map((m, i) => (
               <div
-                key={i}
+                key={`${page}:${i}`}
                 className={`conv-bubble ${
                   m.outgoing === true
                     ? "conv-bubble-outgoing"
@@ -57,6 +60,27 @@ export default function ChatModal({ chat, onClose }: Props) {
               </div>
             ))}
         </div>
+        {data && data.total_pages > 1 && (
+          <div className="flex justify-between items-center px-5 py-3 border-t border-gray-200 bg-gray-50 text-sm">
+            <button
+              className="px-3 py-1 border border-gray-300 rounded disabled:opacity-50"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              ← Older
+            </button>
+            <div className="text-gray-500">
+              Page {data.page} of {data.total_pages} · {data.total} messages
+            </div>
+            <button
+              className="px-3 py-1 border border-gray-300 rounded disabled:opacity-50"
+              disabled={page >= data.total_pages}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Newer →
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
