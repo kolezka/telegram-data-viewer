@@ -90,6 +90,16 @@ React bundle from `apps/web/dist/` and serves the JSON-over-HTTP API at
 | Desktop | `~/Library/Application Support/Telegram Desktop` | Backup only |
 | Standalone | `~/Library/Application Support/Telegram` | Backup only |
 
+## Roadmap
+
+Planned sources beyond the macOS App Store client:
+
+- **iPhone (iOS)** — extract Telegram data from local iTunes/Finder backups (`~/Library/Application Support/MobileSync/Backup/`), or from a jailbroken device's app container. Targets the same Postbox database format that ships with the iOS app, so most of the existing decrypt + parse pipeline should apply with adjusted paths and a different keychain unwrap step.
+- **Android** — pull Telegram's app data via ADB on rooted devices (`/data/data/org.telegram.messenger/`) or from a full device backup. Android uses a different on-disk schema (SQLite + `cache4.db`, not Postbox), so this needs a separate parser alongside the existing one.
+- **Telegram Desktop (tdesktop)** — the official cross-platform desktop client (distinct from the macOS App Store build that's already supported). Stores data under `tdata/` with its own MTProto-based encryption scheme. Currently `tg-viewer` only backs these directories up; full decrypt + parse support is on the roadmap.
+
+Contributions welcome — see [docs/architecture.md](docs/architecture.md) for the decryption and parsing flow that any new source would need to plug into.
+
 ## Requirements
 
 - macOS with Telegram installed
