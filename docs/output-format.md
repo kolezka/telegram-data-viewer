@@ -1,0 +1,61 @@
+# Output format
+
+Layout of `parsed_data/` and the JSON shape of messages and media catalog entries.
+
+## Directory tree
+
+```
+parsed_data/
+  summary.json                     # Export metadata
+  account-{id}/
+    peers.json                     # All peers with names, usernames, phones
+    messages.json                  # All t7 messages with timestamps + media refs
+    messages_fts.json              # Cached/deleted messages from full-text index
+    all_messages.json              # t7 + FTS combined and deduplicated
+    media_catalog.json             # All media files with MIME, size, dimensions, conversation links
+    conversations_index.json       # Conversation list sorted by message count
+    conversations/
+      {username_or_name}.json      # Individual conversation with full history
+```
+
+## Example message JSON
+
+```json
+{
+  "peer_id": 11049657091,
+  "text": "Message content here",
+  "outgoing": true,
+  "timestamp": 1764974409,
+  "date": "2025-12-05T22:40:09+00:00",
+  "peer_name": "Channel Name",
+  "peer_username": "channel_handle",
+  "media": [
+    {"file_id": 5203996991054432397, "dc_id": 2, "width": 128, "height": 128,
+     "filename": "telegram-cloud-document-2-5203996991054432397"}
+  ]
+}
+```
+
+`outgoing: true` means you sent it; `false` means you received it. For channels, `outgoing` is always `false`. Cached/FTS-only entries set `outgoing: null` (direction not recoverable).
+
+## Example media catalog entry
+
+```json
+{
+  "filename": "telegram-cloud-photo-size-4-5962787772773288034-y",
+  "mime_type": "image/jpeg",
+  "size_bytes": 487231,
+  "media_type": "photo",
+  "width": 1280,
+  "height": 720,
+  "thumbnail": "telegram-cloud-photo-size-4-5962787772773288034-s",
+  "linked_message": {
+    "peer_id": 10005541293,
+    "peer_name": "Group name",
+    "timestamp": 1759000793,
+    "date": "2025-09-27T19:19:53+00:00"
+  }
+}
+```
+
+`media_type` is one of: `photo`, `video`, `audio`, `gif`, `sticker`, `document`. `linked_message` is null when the file can't be cross-referenced to a parsed message.
