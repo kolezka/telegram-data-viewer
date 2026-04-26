@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMedia } from "../api/queries";
 import { type Schemas } from "../api/client";
+import { useDebouncedValue } from "../lib/useDebouncedValue";
 import Pagination from "./Pagination";
 import MediaModal from "./MediaModal";
 import MediaTile from "./MediaTile";
@@ -21,7 +22,8 @@ export default function MediaTab() {
   const [page, setPage] = useState(1);
   const [active, setActive] = useState<Schemas["MediaItem"] | null>(null);
 
-  const { data, isLoading, error } = useMedia({ search, type, page, per_page: 60 });
+  const debouncedSearch = useDebouncedValue(search, 250);
+  const { data, isLoading, error } = useMedia({ search: debouncedSearch, type, page, per_page: 60 });
 
   return (
     <div>

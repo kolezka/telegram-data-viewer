@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useChats } from "../api/queries";
 import type { Schemas } from "../api/client";
 import { formatTimestamp } from "../lib/format";
+import { useDebouncedValue } from "../lib/useDebouncedValue";
 import ChatModal from "./ChatModal";
 
 const FILTERS: { key: string; label: string }[] = [
@@ -28,7 +29,8 @@ export default function ChatsTab({ initialSearch = "" }: Props) {
     setSearch(initialSearch);
   }, [initialSearch]);
 
-  const { data, isLoading, error } = useChats({ search, type });
+  const debouncedSearch = useDebouncedValue(search, 250);
+  const { data, isLoading, error } = useChats({ search: debouncedSearch, type });
 
   return (
     <div>

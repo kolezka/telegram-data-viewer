@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useUsers } from "../api/queries";
+import { useDebouncedValue } from "../lib/useDebouncedValue";
 import Pagination from "./Pagination";
 
 interface Props {
@@ -9,7 +10,8 @@ interface Props {
 export default function UsersTab({ onUserClick }: Props) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const { data, isLoading, error } = useUsers({ search, page, per_page: 50 });
+  const debouncedSearch = useDebouncedValue(search, 250);
+  const { data, isLoading, error } = useUsers({ search: debouncedSearch, page, per_page: 50 });
 
   return (
     <div>
