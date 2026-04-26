@@ -24,8 +24,25 @@ DEST="${_args[0]:-.}"
 TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
 BACKUP_DIR="$DEST/tg_$TIMESTAMP"
 
-# Use --progress only when interactive (not batch mode)
-RSYNC_OPTS=(-a)
+# Use --progress only when interactive (not batch mode).
+#
+# --ignore-errors  : keep going past transient I/O errors (e.g. EINTR from
+#                    Telegram actively writing files during the rsync).
+# --exclude '*_partial.*'  : Telegram writes per-download metadata files
+#                    (e.g. *.meta, *.partial) that mutate while the app is
+#                    running and aren't useful to back up.
+# --exclude '*.lock' / '*-journal' / '*-shm' / '*-wal' : SQLite live-state
+#                    files. The decryptor opens its own connection; these
+#                    transients are noise and frequently flap mid-rsync.
+RSYNC_OPTS=(
+  -a
+  --ignore-errors
+  --exclude='*_partial.*'
+  --exclude='*.lock'
+  --exclude='*-journal'
+  --exclude='*-shm'
+  --exclude='*-wal'
+)
 if [[ "$BATCH_MODE" == false ]]; then
   RSYNC_OPTS+=(--progress)
 fi

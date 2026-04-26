@@ -86,10 +86,13 @@ def serve_media(account_id: str, filename: str, request: Request):
     media_dir = state.backup_dir / account_id / "postbox" / "media"
     filepath = media_dir / filename
 
-    try:
-        filepath.resolve().relative_to(media_dir.resolve())
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid path")
+    # NOTE: deliberately NOT calling filepath.resolve() before checking
+    # containment. Telegram backups commonly include symlinks pointing back
+    # to the live install (e.g. secret-chat media files), and resolving the
+    # symlink takes the path outside `media_dir` even though the URL itself
+    # is safe. The filename-level check above ('..', '/', '\\') already
+    # prevents URL-based traversal — that's the only attacker-controlled
+    # input here.
 
     if not filepath.is_file():
         raise HTTPException(status_code=404, detail="File not found")

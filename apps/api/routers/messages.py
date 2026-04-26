@@ -32,6 +32,17 @@ def list_messages(
         db_data = state.databases.get(db, {})
         messages = db_data.get("messages", [])
 
+        # Build a {filename → catalog_entry} lookup so we can enrich each
+        # message's media[] items with media_type / mime_type — those fields
+        # only live in media_catalog.json, but the frontend's MediaTile needs
+        # them to decide between <img>, <video>, etc. (especially for secret
+        # chats where filenames have no extension).
+        catalog_by_filename: dict[str, dict[str, Any]] = {}
+        for entry in db_data.get("media_catalog", []):
+            fname = entry.get("filename")
+            if fname:
+                catalog_by_filename[fname] = entry
+
         t7_keys: set[tuple[str, str]] = set()
 
         for msg in messages:
@@ -40,6 +51,25 @@ def list_messages(
 
             # Shallow-copy before annotating to avoid mutating loaded data.
             annotated = {**msg, "_database": db, "_account": db}
+
+            # Enrich inline media[] with media_type / mime_type from the catalog.
+            inline_media = annotated.get("media")
+            if isinstance(inline_media, list) and inline_media:
+                enriched: list[dict[str, Any]] = []
+                for mi in inline_media:
+                    if not isinstance(mi, dict):
+                        enriched.append(mi)
+                        continue
+                    fname = mi.get("filename") or ""
+                    cat = catalog_by_filename.get(fname)
+                    if cat:
+                        mi = {
+                            **mi,
+                            "media_type": mi.get("media_type") or cat.get("media_type"),
+                            "mime_type": mi.get("mime_type") or cat.get("mime_type"),
+                        }
+                    enriched.append(mi)
+                annotated["media"] = enriched
 
             text = msg.get("text", "")
             if text:

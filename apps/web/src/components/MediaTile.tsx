@@ -4,9 +4,44 @@ import { api } from "../api/client";
 interface MediaEntry {
   filename?: string;
   media_type?: string;
+  mime_type?: string;
   account?: string;
   width?: number | null;
   height?: number | null;
+}
+
+/**
+ * Determine how to render a media item.
+ *
+ * The /api/media catalog provides a clean `media_type` string (photo, video,
+ * gif, sticker, audio, document). The /api/messages route's per-message
+ * `media[]` entries DON'T — they only carry `filename`, dimensions, and
+ * sometimes `mime_type`. So fall back to `mime_type`, then to filename
+ * extension. As a last resort, render as `<img>` (which fails gracefully
+ * to the missing-file placeholder via onError) — that matches the old
+ * inline-JS UI's heuristic.
+ */
+function resolveType(item: MediaEntry): "photo" | "video" | "audio" | "sticker" | "gif" | "document" {
+  const t = (item.media_type ?? "").toLowerCase();
+  if (t === "photo" || t === "video" || t === "audio" || t === "sticker" || t === "gif") return t;
+
+  const mime = (item.mime_type ?? "").toLowerCase();
+  if (mime.startsWith("image/gif")) return "gif";
+  if (mime.startsWith("image/")) return "photo";
+  if (mime.startsWith("video/")) return "video";
+  if (mime.startsWith("audio/")) return "audio";
+
+  const fname = (item.filename ?? "").toLowerCase();
+  if (/\.(jpe?g|png|webp|heic|bmp)$/i.test(fname)) return "photo";
+  if (/\.gif$/i.test(fname)) return "gif";
+  if (/\.(mp4|webm|mov|m4v|mkv|avi)$/i.test(fname)) return "video";
+  if (/\.(mp3|m4a|ogg|opus|wav|aac|flac)$/i.test(fname)) return "audio";
+
+  // Secret chat files often have no extension (e.g. "secret-file-XXXX-4").
+  // The old UI rendered these as <img> and let onError fall back. Match that.
+  if (/^(secret-)?file-/i.test(fname)) return "photo";
+
+  return "document";
 }
 
 interface Props {
@@ -24,7 +59,7 @@ interface Props {
 export default function MediaTile({ item, defaultAccount, className, onClick }: Props) {
   const account = item.account ?? defaultAccount;
   const filename = item.filename;
-  const type = item.media_type ?? "document";
+  const type = resolveType(item);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   if (!filename || !account) {
