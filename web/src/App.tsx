@@ -8,7 +8,7 @@ import MessagesTab from "./components/MessagesTab";
 import MediaTab from "./components/MediaTab";
 
 export default function App() {
-  const [active, setActive] = useState<TabKey>("stats");
+  const [active, setActive] = useState<TabKey>("messages");
 
   return (
     <div className="min-h-screen bg-gray-50">
