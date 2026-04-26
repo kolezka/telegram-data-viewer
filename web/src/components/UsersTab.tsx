@@ -2,7 +2,11 @@ import { useState } from "react";
 import { useUsers } from "../api/queries";
 import Pagination from "./Pagination";
 
-export default function UsersTab() {
+interface Props {
+  onUserClick?: (name: string) => void;
+}
+
+export default function UsersTab({ onUserClick }: Props) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const { data, isLoading, error } = useUsers({ search, page, per_page: 50 });
@@ -28,9 +32,10 @@ export default function UsersTab() {
           </div>
           <div className="space-y-2">
             {data.users.map((u) => (
-              <div
+              <button
                 key={`${u.database}:${u.id}`}
-                className="border border-gray-200 rounded p-3 flex justify-between items-center bg-white"
+                onClick={() => onUserClick?.(u.name)}
+                className="w-full text-left border border-gray-200 rounded p-3 flex justify-between items-center bg-white hover:border-tg-primary hover:bg-blue-50 transition-colors"
               >
                 <div>
                   <div className="font-semibold">{u.name}</div>
@@ -41,7 +46,7 @@ export default function UsersTab() {
                   </div>
                 </div>
                 <div className="text-xs text-gray-400 font-mono">{u.database}</div>
-              </div>
+              </button>
             ))}
           </div>
           <Pagination page={data.page} totalPages={data.total_pages} onChange={setPage} />

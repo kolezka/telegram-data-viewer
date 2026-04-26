@@ -2,13 +2,20 @@ import { useState } from "react";
 import TabNav, { type TabKey } from "./components/TabNav";
 import StatsTab from "./components/StatsTab";
 import DatabasesTab from "./components/DatabasesTab";
-import UsersTab from "./components/UsersTab";
 import ChatsTab from "./components/ChatsTab";
 import MessagesTab from "./components/MessagesTab";
+import UsersTab from "./components/UsersTab";
 import MediaTab from "./components/MediaTab";
 
 export default function App() {
   const [active, setActive] = useState<TabKey>("messages");
+  // Pre-fill the Chats tab search when the Users tab cross-links to it.
+  const [chatsInitialSearch, setChatsInitialSearch] = useState("");
+
+  const handleUserClick = (name: string) => {
+    setChatsInitialSearch(name);
+    setActive("chats");
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -19,13 +26,13 @@ export default function App() {
       </header>
 
       <div className="max-w-6xl mx-auto mt-6 bg-white rounded-lg shadow-sm overflow-hidden">
-        <TabNav active={active} onChange={setActive} />
+        <TabNav active={active} onChange={(k) => { setActive(k); if (k !== "chats") setChatsInitialSearch(""); }} />
         <div className="p-6">
           {active === "stats" && <StatsTab />}
           {active === "databases" && <DatabasesTab />}
-          {active === "chats" && <ChatsTab />}
+          {active === "chats" && <ChatsTab initialSearch={chatsInitialSearch} />}
           {active === "messages" && <MessagesTab />}
-          {active === "users" && <UsersTab />}
+          {active === "users" && <UsersTab onUserClick={handleUserClick} />}
           {active === "media" && <MediaTab />}
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useChats } from "../api/queries";
 import type { Schemas } from "../api/client";
 import { formatTimestamp } from "../lib/format";
@@ -14,10 +14,19 @@ const FILTERS: { key: string; label: string }[] = [
   { key: "fts", label: "Has FTS" },
 ];
 
-export default function ChatsTab() {
-  const [search, setSearch] = useState("");
+interface Props {
+  initialSearch?: string;
+}
+
+export default function ChatsTab({ initialSearch = "" }: Props) {
+  const [search, setSearch] = useState(initialSearch);
   const [type, setType] = useState("");
   const [active, setActive] = useState<Schemas["Chat"] | null>(null);
+
+  // Sync local search when parent passes a new initial value (e.g., from user click)
+  useEffect(() => {
+    setSearch(initialSearch);
+  }, [initialSearch]);
 
   const { data, isLoading, error } = useChats({ search, type });
 
