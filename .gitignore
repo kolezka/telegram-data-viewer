@@ -49,6 +49,9 @@ Thumbs.db
 .claude/
 .worktrees/
 
+# Superpowers skill artifacts (planning docs, specs)
+docs/superpowers/
+
 # Playwright MCP cache
 .playwright-mcp/
 
