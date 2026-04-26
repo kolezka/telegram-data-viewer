@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMessages } from "../api/queries";
 import type { Schemas } from "../api/client";
 import { formatTimestamp } from "../lib/format";
+import MediaTile from "./MediaTile";
 
 interface Props {
   chat: Schemas["Chat"];
@@ -55,6 +56,18 @@ export default function ChatModal({ chat, onClose }: Props) {
                     : "conv-bubble-unknown"
                 }`}
               >
+                {(m as { media?: Array<{ filename?: string; media_type?: string; account?: string }>; _account?: string }).media?.length ? (
+                  <div className="grid grid-cols-2 gap-1 mb-2">
+                    {(m as { media?: Array<{ filename?: string; media_type?: string; account?: string }>; _account?: string }).media!.map((mi, mi_idx) => (
+                      <MediaTile
+                        key={mi_idx}
+                        item={mi}
+                        defaultAccount={(m as { _account?: string })._account ?? ""}
+                        className="aspect-square overflow-hidden rounded"
+                      />
+                    ))}
+                  </div>
+                ) : null}
                 <div className="whitespace-pre-wrap">{m.text || <em className="text-gray-500">(no text)</em>}</div>
                 <div className="text-xs text-gray-500 mt-1">{formatTimestamp(m.timestamp)}</div>
               </div>
