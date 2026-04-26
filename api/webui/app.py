@@ -47,12 +47,9 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     app.include_router(stats.router)
     app.include_router(export_data.router)
 
-    # If web/dist exists, mount it at /. Otherwise fall back to the transitional
-    # pages router (templates/index.html). Task 15 removes the fallback.
+    # Mount the React bundle at /. If web/dist/ is missing (e.g., in a fresh
+    # CI checkout), the API endpoints still work; only / returns 404.
     if WEB_DIST.is_dir():
         app.mount("/", StaticFiles(directory=str(WEB_DIST), html=True), name="webdist")
-    else:
-        from webui.routers import pages
-        app.include_router(pages.router)
 
     return app
