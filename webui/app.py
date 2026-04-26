@@ -46,4 +46,6 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     app.include_router(media.router)
     from webui.routers import stats
     app.include_router(stats.router)
+    from webui.routers import export_data
+    app.include_router(export_data.router)
     return app
