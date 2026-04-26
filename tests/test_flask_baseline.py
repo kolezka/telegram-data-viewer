@@ -13,7 +13,7 @@ import pytest
 @pytest.fixture
 def flask_client(mini_data_dir: Path):
     """Flask test client with mini-parsed loaded into module globals."""
-    import webui as flask_app_module
+    import webui_flask as flask_app_module
 
     flask_app_module.load_telegram_data(str(mini_data_dir))
     # The fixture's summary.json carries a relative backup_dir; force it absolute
@@ -204,11 +204,11 @@ def test_users_pagination(flask_client):
 
 def test_peer_type_branches():
     """Pin _peer_type for all branches so the FastAPI port's helper matches."""
-    import webui
+    import webui_flask
 
-    assert webui._peer_type(0) == "user"
-    assert webui._peer_type(1 << 32) == "group"
-    assert webui._peer_type(2 << 32) == "channel"
-    assert webui._peer_type(3 << 32) == "secret"
-    assert webui._peer_type(8 << 32) == "bot"
-    assert webui._peer_type(9 << 32) == "other"
+    assert webui_flask._peer_type(0) == "user"
+    assert webui_flask._peer_type(1 << 32) == "group"
+    assert webui_flask._peer_type(2 << 32) == "channel"
+    assert webui_flask._peer_type(3 << 32) == "secret"
+    assert webui_flask._peer_type(8 << 32) == "bot"
+    assert webui_flask._peer_type(9 << 32) == "other"

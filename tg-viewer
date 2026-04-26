@@ -10,7 +10,7 @@ BACKUP_SCRIPT="$SCRIPT_DIR/tg-backup.sh"
 EXTRACT_SCRIPT="$SCRIPT_DIR/extract-keys.sh"
 APPSTORE_DECRYPT_SCRIPT="$SCRIPT_DIR/tg_appstore_decrypt.py"
 POSTBOX_PARSER_SCRIPT="$SCRIPT_DIR/postbox_parser.py"
-WEBUI_SCRIPT="$SCRIPT_DIR/webui.py"
+WEBUI_SCRIPT="$SCRIPT_DIR/webui_flask.py"
 REQUIREMENTS_FILE="$SCRIPT_DIR/requirements.txt"
 
 # ── Colors ────────────────────────────────────────────────────────────────────
