@@ -10,7 +10,7 @@ macOS toolkit for extracting, decrypting, and browsing Telegram messages — inc
 flowchart LR
     A["<b>tg-backup.sh</b><br/>Copy app data"] --> B["<b>tg_appstore_decrypt.py</b><br/>Decrypt SQLCipher"]
     B --> C["<b>postbox_parser.py</b><br/>Parse messages"]
-    C --> D["<b>webui.py</b><br/>Browse in browser"]
+    C --> D["<b>webui</b><br/>Browse in browser"]
 
     style A fill:#4a9eff,color:#fff,stroke:none
     style B fill:#ff6b6b,color:#fff,stroke:none
@@ -50,7 +50,7 @@ Or call the scripts directly:
 ./tg-backup.sh ./data
 python3 tg_appstore_decrypt.py ./data/tg_*/
 python3 postbox_parser.py ./data/tg_*/
-python3 webui.py ./data/tg_*/parsed_data
+python3 -m webui ./data/tg_*/parsed_data
 ```
 
 ## Common scenarios
@@ -233,7 +233,7 @@ flowchart TD
     end
 
     subgraph view ["4. View"]
-        OUT --> WEB["Flask Web UI<br/><code>http://127.0.0.1:5000</code>"]
+        OUT --> WEB["FastAPI Web UI<br/><code>http://127.0.0.1:5000</code>"]
     end
 
     style backup fill:#e8f4fd,stroke:#4a9eff
@@ -267,7 +267,7 @@ flowchart LR
 | `tg-backup.sh` | Copies Telegram data from App Store / Desktop / Standalone |
 | `tg_appstore_decrypt.py` | Decrypts `.tempkeyEncrypted` and opens SQLCipher databases |
 | `postbox_parser.py` | Parses Postbox binary format — extracts messages, peers, conversations from t2/t7/ft41 |
-| `webui.py` | Flask web UI for browsing messages |
+| `webui/` | FastAPI web UI package for browsing messages (entrypoint: `python -m webui`) |
 | `extract-keys.sh` | Extracts encryption keys from macOS Keychain (legacy) |
 | `tg_decrypt.py` | Legacy decryptor — tries multiple key formats via sqlcipher3 |
 
@@ -374,7 +374,7 @@ parsed_data/
 
 ## Web UI
 
-The viewer is a single-page Flask app served at `http://127.0.0.1:5000`.
+The viewer is a single-page FastAPI app served at `http://127.0.0.1:5000`.
 
 | Tab | What it shows |
 |-----|---------------|
@@ -388,6 +388,14 @@ The conversation modal renders messages as WhatsApp-style bubbles — green on t
 
 Videos in the Media grid render their first-frame thumbnail (via `<video preload="metadata">`) with a play overlay. Audio files open in the lightbox with a native player; documents become a download link.
 
+## API documentation
+
+The web UI exposes a FastAPI backend. Once running, interactive API docs are at:
+
+- Swagger UI: http://127.0.0.1:5000/docs
+- ReDoc: http://127.0.0.1:5000/redoc
+- OpenAPI schema: http://127.0.0.1:5000/openapi.json
+
 ## Supported Telegram versions
 
 | Version | Location | Status |
@@ -400,7 +408,7 @@ Videos in the Media grid render their first-frame thumbnail (via `<video preload
 
 - macOS with Telegram installed
 - Python 3.7+
-- Dependencies: `sqlcipher3`, `cryptography`, `flask`, `flask-cors`, `jinja2`
+- Dependencies: `sqlcipher3`, `cryptography`, `fastapi`, `uvicorn`, `pydantic`
 
 ## Troubleshooting
 
