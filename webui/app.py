@@ -34,4 +34,6 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
 
     from webui.routers import pages
     app.include_router(pages.router)
+    from webui.routers import databases
+    app.include_router(databases.router)
     return app
