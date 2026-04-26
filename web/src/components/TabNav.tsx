@@ -1,12 +1,12 @@
 export type TabKey = "stats" | "databases" | "chats" | "messages" | "users" | "media";
 
 const TABS: { key: TabKey; label: string }[] = [
-  { key: "stats", label: "Overview" },
-  { key: "databases", label: "Databases" },
-  { key: "chats", label: "Chats" },
   { key: "messages", label: "Messages" },
-  { key: "users", label: "Users" },
+  { key: "chats", label: "Chats" },
   { key: "media", label: "Media" },
+  { key: "users", label: "Users" },
+  { key: "databases", label: "Databases" },
+  { key: "stats", label: "Overview" },
 ];
 
 interface Props {

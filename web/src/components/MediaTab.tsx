@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useMedia } from "../api/queries";
-import { api, type Schemas } from "../api/client";
+import { type Schemas } from "../api/client";
+import { useDebouncedValue } from "../lib/useDebouncedValue";
 import Pagination from "./Pagination";
 import MediaModal from "./MediaModal";
+import MediaTile from "./MediaTile";
 
 const TYPES: { key: string; label: string }[] = [
   { key: "", label: "All" },
@@ -20,7 +22,8 @@ export default function MediaTab() {
   const [page, setPage] = useState(1);
   const [active, setActive] = useState<Schemas["MediaItem"] | null>(null);
 
-  const { data, isLoading, error } = useMedia({ search, type, page, per_page: 60 });
+  const debouncedSearch = useDebouncedValue(search, 250);
+  const { data, isLoading, error } = useMedia({ search: debouncedSearch, type, page, per_page: 60 });
 
   return (
     <div>
@@ -57,30 +60,13 @@ export default function MediaTab() {
           <div className="text-sm text-gray-500 mb-3">{data.total} items</div>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
             {data.media.map((m) => (
-              <button
+              <MediaTile
                 key={`${m.account}:${m.filename}`}
+                item={m}
+                defaultAccount={m.account ?? ""}
                 onClick={() => setActive(m)}
                 className="aspect-square bg-gray-100 rounded overflow-hidden border border-gray-200 hover:border-tg-primary"
-              >
-                {m.media_type === "photo" || m.media_type === "sticker" || m.media_type === "gif" ? (
-                  <img
-                    src={api.mediaUrl(m.account, m.filename)}
-                    alt={m.filename}
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                  />
-                ) : m.media_type === "video" ? (
-                  <video
-                    src={api.mediaUrl(m.account, m.filename)}
-                    preload="metadata"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-xs text-gray-500 p-2 break-all">
-                    {m.filename || m.media_type}
-                  </div>
-                )}
-              </button>
+              />
             ))}
           </div>
           <Pagination page={data.page} totalPages={data.total_pages} onChange={setPage} />

@@ -1,5 +1,6 @@
 import { api, type Schemas } from "../api/client";
 import { formatTimestamp, formatBytes, formatDuration } from "../lib/format";
+import { useModal } from "../lib/useModal";
 
 interface Props {
   item: Schemas["MediaItem"];
@@ -7,6 +8,7 @@ interface Props {
 }
 
 export default function MediaModal({ item, onClose }: Props) {
+  useModal(onClose);
   const url = api.mediaUrl(item.account, item.filename);
   const linked = item.linked_message as
     | { peer_name?: string; timestamp?: number }
