@@ -35,7 +35,8 @@ def check_dependencies():
     for pkg, import_name in [
         ("sqlcipher3", "sqlcipher3"),
         ("cryptography", "cryptography"),
-        ("flask", "flask"),
+        ("fastapi", "fastapi"),
+        ("uvicorn", "uvicorn"),
     ]:
         try:
             __import__(import_name)
