@@ -31,4 +31,7 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
         version="1.0.0",
         lifespan=lifespan,
     )
+
+    from webui.routers import pages
+    app.include_router(pages.router)
     return app
