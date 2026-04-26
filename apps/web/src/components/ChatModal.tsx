@@ -82,7 +82,7 @@ export default function ChatModal({ chat, onClose }: Props) {
               disabled={page <= 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
             >
-              ← Older
+              ← Newer
             </button>
             <div className="text-gray-500">
               Page {data.page} of {data.total_pages} · {data.total} messages
@@ -92,7 +92,7 @@ export default function ChatModal({ chat, onClose }: Props) {
               disabled={page >= data.total_pages}
               onClick={() => setPage((p) => p + 1)}
             >
-              Newer →
+              Older →
             </button>
           </div>
         )}
