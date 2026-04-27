@@ -14,17 +14,19 @@ from api.state import AppState
 WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
 
 
-def create_app(data_dir: str | Path | None = None) -> FastAPI:
+def create_app(data_dir: str | Path | None = None, account: str | None = None) -> FastAPI:
     """Build the FastAPI app, loading data_dir into app.state at startup.
 
     `data_dir` may be None for tests that override state directly via
     `app.state.app_state = AppState(...)` after construction.
+
+    `account` (optional) restricts loading to a single `account-{id}` directory.
     """
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         if data_dir is not None:
-            app.state.app_state = load_telegram_data(data_dir)
+            app.state.app_state = load_telegram_data(data_dir, account=account)
         else:
             app.state.app_state = getattr(app.state, "app_state", AppState())
         yield

@@ -12,10 +12,20 @@ from typing import Any
 from api.state import AppState
 
 
-def load_parsed_data(data_dir: Path) -> dict[str, Any]:
+def load_parsed_data(data_dir: Path, account: str | None = None) -> dict[str, Any]:
     databases: dict[str, Any] = {}
 
-    for account_dir in sorted(data_dir.glob("account-*")):
+    all_dirs = sorted(data_dir.glob("account-*"))
+    if account:
+        wanted = account if account.startswith("account-") else f"account-{account}"
+        all_dirs = [d for d in all_dirs if d.name == wanted]
+        if not all_dirs:
+            raise SystemExit(
+                f"ERROR: --account {account!r} matched no directory in {data_dir}.\n"
+                f"  Available: {', '.join(d.name for d in sorted(data_dir.glob('account-*'))) or '(none)'}"
+            )
+
+    for account_dir in all_dirs:
         account_id = account_dir.name
 
         def _read(name: str) -> Any:
@@ -50,7 +60,7 @@ def load_parsed_data(data_dir: Path) -> dict[str, Any]:
     return {"databases": databases}
 
 
-def load_telegram_data(data_dir: str | Path) -> AppState:
+def load_telegram_data(data_dir: str | Path, account: str | None = None) -> AppState:
     state = AppState()
     state.export_dir = Path(data_dir)
 
@@ -77,7 +87,7 @@ def load_telegram_data(data_dir: str | Path) -> AppState:
 
     if summary_file.exists() or has_account_dirs:
         print("Detected parsed_data format (postbox_parser.py)")
-        state.telegram_data = load_parsed_data(state.export_dir)
+        state.telegram_data = load_parsed_data(state.export_dir, account=account)
     else:
         master_file = state.export_dir / "telegram_export.json"
         if master_file.exists():

@@ -15,6 +15,7 @@ def main() -> None:
     parser.add_argument("data_dir", help="Directory containing decrypted parsed_data")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=5000)
+    parser.add_argument("--account", help="Only load this account-{id} directory")
     args = parser.parse_args()
 
     if not Path(args.data_dir).exists():
@@ -23,11 +24,13 @@ def main() -> None:
 
     print("\n🚀 Starting Telegram Data Web UI (FastAPI)")
     print(f"📂 Data directory: {args.data_dir}")
+    if args.account:
+        print(f"👤 Account filter: {args.account}")
     print(f"🌐 URL: http://{args.host}:{args.port}")
     print(f"📖 OpenAPI docs: http://{args.host}:{args.port}/docs")
     print("\nPress Ctrl+C to stop\n")
 
-    app = create_app(args.data_dir)
+    app = create_app(args.data_dir, account=args.account)
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 
 

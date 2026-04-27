@@ -312,6 +312,7 @@ def main():
                         help='Local passcode (default: "no-matter-key" = no passcode)')
     parser.add_argument('--output', help='Output directory (default: backup_dir/decrypted_data)')
     parser.add_argument('--tempkey', help='Path to .tempkeyEncrypted file')
+    parser.add_argument('--account', help='Only decrypt this account-{id} directory')
     parser.add_argument('--redact', action='store_true',
                         help='Mask sensitive values (account IDs, keys, paths) in console output')
 
@@ -355,6 +356,12 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     account_dirs = sorted(backup_dir.glob("account-*"))
+    if args.account:
+        wanted = args.account if args.account.startswith("account-") else f"account-{args.account}"
+        account_dirs = [d for d in account_dirs if d.name == wanted]
+        if not account_dirs:
+            print(f"ERROR: --account {args.account!r} matched no directory in {redact.path(backup_dir)}")
+            sys.exit(1)
     if not account_dirs:
         print("No account-* directories found")
         sys.exit(1)

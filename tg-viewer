@@ -31,6 +31,52 @@ _redact_path() {
     fi
 }
 
+# Resolve an --account value (peerName, bare id, or account-{id}) to a folder id
+# by reading accounts-shared-data inside the given search dir. Echoes the bare id
+# on success; calls die() on ambiguity / no match / missing file.
+# Pure numeric ids are returned as-is without lookup.
+_resolve_account_id() {
+    local raw="$1" search_dir="$2"
+    [[ -z "$raw" ]] && { echo ""; return; }
+
+    local stripped="${raw#account-}"
+    if [[ "$stripped" =~ ^[0-9]+$ ]]; then
+        echo "$stripped"
+        return
+    fi
+
+    local shared=""
+    for d in "$search_dir" "$search_dir/.." "$(dirname "$search_dir")" "$(dirname "$(dirname "$search_dir")")"; do
+        [[ -f "$d/accounts-shared-data" ]] && { shared="$d/accounts-shared-data"; break; }
+    done
+    [[ -n "$shared" ]] || die "Cannot resolve --account '$raw': accounts-shared-data not found near $search_dir"
+
+    local output rc
+    output=$(python3 - "$shared" "$raw" 2>&1 <<'PYEOF'
+import json, sys
+shared, query = sys.argv[1], sys.argv[2].lower()
+data = json.load(open(shared))
+matches = []
+for acc in data.get('accounts', []):
+    name = (acc.get('peerName') or '')
+    if query == name.lower() or (query in name.lower() and query):
+        matches.append((acc['id'] % (2**64), name))
+if not matches:
+    avail = ', '.join(a.get('peerName', '?') for a in data.get('accounts', []))
+    sys.stderr.write(f'no match. available peerNames: {avail}\n'); sys.exit(2)
+if len(matches) > 1:
+    names = ', '.join(n for _, n in matches)
+    sys.stderr.write(f'ambiguous: matches {names}\n'); sys.exit(3)
+print(matches[0][0])
+PYEOF
+)
+    rc=$?
+    if [[ $rc -ne 0 ]]; then
+        die "Cannot resolve --account '$raw': $output"
+    fi
+    echo "$output"
+}
+
 # ── Help ──────────────────────────────────────────────────────────────────────
 show_help() {
     cat << 'EOF'
@@ -66,6 +112,9 @@ WORKFLOW EXAMPLES:
 OPTIONS:
     --port PORT         Web UI port (default: 5000)
     --host HOST         Web UI host (default: 127.0.0.1)
+    --account ID|NAME   Restrict decrypt/parse/webui/full to one account.
+                        Accepts the account-{id} folder id, the bare numeric id,
+                        or a peerName from accounts-shared-data (e.g. tehacepol).
     --redact            Mask sensitive values (account IDs, keys, paths) in CLI output
     --help, -h          Show this help
 
@@ -204,7 +253,14 @@ run_decrypt() {
     log "Decrypting databases in: $(_redact_path "$backup_dir")"
     local abs_backup_dir
     abs_backup_dir="$(cd "$backup_dir" && pwd)"
-    (cd "$SCRIPT_DIR/apps" && python3 -m tool.tg_appstore_decrypt "$abs_backup_dir" "${redact_arg[@]+"${redact_arg[@]}"}")
+    local account_arg=()
+    if [[ -n "${TG_ACCOUNT_RAW:-}" ]]; then
+        local resolved
+        resolved=$(_resolve_account_id "$TG_ACCOUNT_RAW" "$abs_backup_dir")
+        account_arg=(--account "$resolved")
+        log "Account filter: $TG_ACCOUNT_RAW → account-$(_redact_path "$resolved")"
+    fi
+    (cd "$SCRIPT_DIR/apps" && python3 -m tool.tg_appstore_decrypt "$abs_backup_dir" "${redact_arg[@]+"${redact_arg[@]}"}" "${account_arg[@]+"${account_arg[@]}"}")
 }
 
 run_parse() {
@@ -222,7 +278,14 @@ run_parse() {
     log "Parsing messages, peers, and conversations in: $(_redact_path "$backup_dir")"
     local abs_backup_dir
     abs_backup_dir="$(cd "$backup_dir" && pwd)"
-    (cd "$SCRIPT_DIR/apps" && python3 -m tool.postbox_parser "$abs_backup_dir" "${redact_arg[@]+"${redact_arg[@]}"}")
+    local account_arg=()
+    if [[ -n "${TG_ACCOUNT_RAW:-}" ]]; then
+        local resolved
+        resolved=$(_resolve_account_id "$TG_ACCOUNT_RAW" "$abs_backup_dir")
+        account_arg=(--account "$resolved")
+        log "Account filter: $TG_ACCOUNT_RAW → account-$(_redact_path "$resolved")"
+    fi
+    (cd "$SCRIPT_DIR/apps" && python3 -m tool.postbox_parser "$abs_backup_dir" "${redact_arg[@]+"${redact_arg[@]}"}" "${account_arg[@]+"${account_arg[@]}"}")
 }
 
 run_webui() {
@@ -257,7 +320,14 @@ run_webui() {
     log "Data directory: $(_redact_path "$abs_data_dir")"
     log "URL: http://$host:$port"
 
-    (cd "$SCRIPT_DIR/apps" && python3 -m api "$abs_data_dir" --host "$host" --port "$port")
+    local account_arg=()
+    if [[ -n "${TG_ACCOUNT_RAW:-}" ]]; then
+        local resolved
+        resolved=$(_resolve_account_id "$TG_ACCOUNT_RAW" "$abs_data_dir")
+        account_arg=(--account "$resolved")
+        log "Account filter: $TG_ACCOUNT_RAW → account-$(_redact_path "$resolved")"
+    fi
+    (cd "$SCRIPT_DIR/apps" && python3 -m api "$abs_data_dir" --host "$host" --port "$port" "${account_arg[@]+"${account_arg[@]}"}")
 }
 
 run_dev() {
@@ -284,8 +354,16 @@ run_dev() {
     log "Bun dev:  http://127.0.0.1:5173 (proxies API to FastAPI)"
     log "Press Ctrl+C to stop both"
 
+    local account_arg=()
+    if [[ -n "${TG_ACCOUNT_RAW:-}" ]]; then
+        local resolved
+        resolved=$(_resolve_account_id "$TG_ACCOUNT_RAW" "$abs_data_dir")
+        account_arg=(--account "$resolved")
+        log "Account filter: $TG_ACCOUNT_RAW → account-$(_redact_path "$resolved")"
+    fi
+
     # Start FastAPI in background
-    (cd "$SCRIPT_DIR/apps" && python3 -m api "$abs_data_dir" --port 5000) &
+    (cd "$SCRIPT_DIR/apps" && python3 -m api "$abs_data_dir" --port 5000 "${account_arg[@]+"${account_arg[@]}"}") &
     local api_pid=$!
 
     # Start Tailwind watcher in background
@@ -417,10 +495,12 @@ main() {
     # Parse global options from anywhere in the arg list. Both forms work:
     #   ./tg-viewer --redact full
     #   ./tg-viewer full --redact
+    local account_raw=""
     while [[ $# -gt 0 ]]; do
         case $1 in
             --port) port="$2"; shift 2 ;;
             --host) host="$2"; shift 2 ;;
+            --account) account_raw="$2"; shift 2 ;;
             --redact) redact=true; shift ;;
             --help|-h) show_help; exit 0 ;;
             -*) die "Unknown option: $1" ;;
@@ -430,6 +510,9 @@ main() {
 
     if [[ "$redact" == true ]]; then
         export TG_REDACT=1
+    fi
+    if [[ -n "$account_raw" ]]; then
+        export TG_ACCOUNT_RAW="$account_raw"
     fi
 
     set -- "${positionals[@]+"${positionals[@]}"}"
