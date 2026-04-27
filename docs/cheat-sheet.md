@@ -150,6 +150,25 @@ A live Postbox DB contains additional `t*` tables (`t1`, `t5`, `t8`, `t9`, …) 
 
 Ref: `apps/tool/postbox_parser.py:29-97`.
 
+#### Known-but-unparsed peer field shortenings
+
+The parser's metadata-noise filter at `apps/tool/postbox_parser.py:100-106` lists short field names that appear inside `t2` values but are **not** currently decoded into peer records. They are Telegram premium / cosmetic fields — exact byte tags not yet mapped:
+
+| Shortening | Likely meaning |
+|------------|----------------|
+| `uns` | user notification settings |
+| `sth` | sticker-set / status hash |
+| `clclr` / `nclr` | accent / name color |
+| `pclr` / `pgem` | profile color / premium-emoji background |
+| `bgem` | background emoji (chat wallpaper) |
+| `ssc` | secret-chat session counter |
+| `vfid` | verification / verified-by file id |
+| `emjs` | emoji status |
+| `biri` | bio-related ref |
+| `fl` | flags |
+
+Mapping any of these requires sampling t2 rows for accounts known to have that feature enabled and hex-diffing.
+
 ### Message key (`t7`, 20 bytes, big-endian unless noted)
 
 ```
@@ -241,6 +260,23 @@ Ref: `apps/tool/postbox_parser.py:273-372`.
 The width/height markers live within ±80 bytes of the file_id marker — scan a window, don't assume fixed offset.
 
 Ref: `apps/tool/postbox_parser.py:308-335`.
+
+#### Media type classification
+
+After resolving a file on disk, the parser sniffs MIME from header bytes (§7) and then buckets it (`apps/tool/postbox_parser.py:211-230`):
+
+| Output type | Rule |
+|-------------|------|
+| `sticker` | `application/x-tgsticker`, filename contains `-tgs`, ends `.tgs`, `image/svg+xml`, `image/icns`, **or** `image/webp` without `photo-size` in filename |
+| `gif` | `image/gif` |
+| `photo` | any other `image/*` |
+| `video` | `video/*` |
+| `audio` | `audio/*` |
+| `document` | everything else |
+
+#### Known-but-unparsed media sub-tags
+
+These exist in `t6` / `t7` payloads but are **not** decoded today: `duration`, `file_size`, `mime_type` (the catalog's `mime_type` is sniffed from disk, not parsed from binary), thumbnail size, `caption`, voice-note waveform, video round-message flag, sticker-set ref, document filename. The Postbox blob carries them; the byte tags just haven't been reverse-engineered. Same status as the missing reply / forward / reaction tags noted in §12.
 
 ### MIME sniffing
 
