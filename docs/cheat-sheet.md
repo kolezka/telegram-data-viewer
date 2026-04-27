@@ -4,6 +4,30 @@ Quick reference for working with Telegram macOS App Store data: decryption, Post
 
 ---
 
+## 0. Terminology
+
+| Term | Definition |
+|------|------------|
+| **MTProto** | Telegram's wire protocol — defines transport-layer encryption, RPC framing, and the secret-chat E2EE handshake. Not used by this toolkit (we read on-disk artifacts), but secret-chat keys originated from it. |
+| **Postbox** | Telegram's local storage layer (a custom key-value engine on top of SQLite + binary blobs). The "Postbox format" is the binary serialization Postbox writes inside `t2`, `t7`, etc. — proprietary, no public spec. |
+| **SQLCipher** | A drop-in SQLite fork that encrypts pages with AES-256. Telegram uses raw-key mode (no PBKDF2). |
+| **DC / dc_id** | **Data Center ID.** Telegram operates ~5 numbered datacenters (`1`–`5` in production, code defensively allows `1`–`10`). Every cloud-stored file is pinned to the DC that holds it; `dc_id` is part of the file URL and is stored next to `file_id` in message blobs so the client knows where to fetch from. |
+| **peer_id** | **Composite int64 identifier** for any conversation endpoint (user, group, channel, secret-chat session, bot). Encoded as `(type_hi << 32) \| id_lo` — see §5. The same human user can appear under different `peer_id`s (e.g. user vs. secret chat with that user). |
+| **file_id** | **Postbox-internal numeric ID** for a media file, unique within a DC. Reused by Telegram to deduplicate uploads. Sanity-checked as `> 1_000_000_000` to avoid false-positive matches in binary scans. Distinct from the API-level `file_reference` (not stored locally). |
+| **access_hash** | API-level int64 token Telegram requires to fetch a peer/file from the network. Largely irrelevant for offline forensics — backups already contain the bytes. |
+| **namespace** | Postbox concept for partitioning messages within a peer (e.g. cloud messages vs. scheduled vs. secret). Stored in t7 key bytes 16–19. Most regular messages use namespace `0`. |
+| **tempkey** | The contents of `.tempkeyEncrypted` — the AES-CBC-encrypted blob holding `dbKey + dbSalt + verification hash`. "Decrypting the tempkey" yields the SQLCipher raw key. |
+| **dbKey / dbSalt** | The 32-byte AES key and 16-byte salt that together (concatenated) form the 48-byte SQLCipher raw key. |
+| **t2 / t7 / t12 / t62** | Postbox tables — see §3 for the inventory. Naming is internal; numbers are stable across versions. |
+| **ft41** | The FTS5 (full-text search) virtual table backing message search. `ft41_content` is the content table — often the **only** place "deleted" message text survives because FTS rows aren't always pruned with the source row. |
+| **secret chat** | Telegram's E2EE 1:1 chat. Identified by `peer_id` hi32 = `0x03`. Direction lives in the t7 key, not the value. Media is symlinked into the live app's directory and uses a different filename scheme (`secret-file-*`). |
+| **service message** | Auto-generated message (joins, leaves, title/photo changes, pinned-message events). Currently **not** parsed by this toolkit — the binary tags are unknown. |
+| **Saved Messages** | Telegram's per-user "notes to self" chat. Conventionally `peer_id == own_user_id`. Not specially handled; appears as a regular user-type peer pointing at the account owner. |
+| **Group Container** | macOS sandbox-shared directory under `~/Library/Group Containers/`. Telegram App Store uses `6N38VWS5BX.ru.keepcoder.Telegram` (Team ID + bundle ID) so its main app and extensions can share data. |
+| **`.tempkeyEncrypted`** | The on-disk file holding the encrypted tempkey. Lives at the root of `appstore/`. |
+
+---
+
 ## 1. File paths
 
 ```
@@ -95,6 +119,8 @@ No PBKDF2 — raw key mode. Refs: `apps/tool/tg_appstore_decrypt.py:137-140`, `a
 | `ft41_content` | rowid | c0=peer_ref, c1=msg_ref, c2=text, c3=extra | FTS5 full-text index (also surfaces deleted rows) |
 
 Ref: `apps/tool/postbox_parser.py:1-15`.
+
+A live Postbox DB contains additional `t*` tables (`t1`, `t5`, `t8`, `t9`, …) that this toolkit doesn't parse yet — `tg_appstore_decrypt.py` enumerates them via `sqlite_master` for inspection (`apps/tool/tg_appstore_decrypt.py:236-254`) but only `t2` and `t7` are decoded end-to-end. To map a new one, dump its schema with `PRAGMA table_info('tN')` and hex-dump a few values.
 
 ---
 
