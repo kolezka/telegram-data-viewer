@@ -17,10 +17,20 @@ def compute_chats(
     chats: dict[str, dict[str, Any]] = {}
 
     fts_peer_refs: set = set()
+    bots: set[str] = set()
     for db_data in state.databases.values():
         for m in db_data.get("messages_fts", []):
             ref = str(m.get("peer_ref", ""))
             fts_peer_refs.add(ref.lstrip("p"))
+        for peer in db_data.get("peers", []):
+            if peer.get("is_bot"):
+                bots.add(str(peer.get("id", "")))
+
+    def _resolve_type(pid: int | str | None, all_ids: list[str]) -> str:
+        base = peer_type(pid) if isinstance(pid, int) else "other"
+        if base == "user" and any(aid in bots for aid in all_ids):
+            return "bot"
+        return base
 
     for db_name, db_data in state.databases.items():
         conversations = db_data.get("conversations", [])
@@ -38,7 +48,7 @@ def compute_chats(
                         "all_peer_ids": all_ids,
                         "name": conv.get("peer_name") or f"Chat {chat_id}",
                         "username": conv.get("peer_username") or "",
-                        "type": peer_type(pid),
+                        "type": _resolve_type(pid, all_ids),
                         "has_fts": has_fts,
                         "message_count": conv.get("message_count", 0),
                         "last_message": conv.get("last_message"),
@@ -70,7 +80,7 @@ def compute_chats(
                     "all_peer_ids": [chat_id],
                     "name": chat_name or f"Chat {chat_id}",
                     "username": msg.get("peer_username") or "",
-                    "type": peer_type(pid) if isinstance(pid, int) else "other",
+                    "type": _resolve_type(pid, [chat_id]),
                     "has_fts": chat_id in fts_peer_refs,
                     "message_count": 0,
                     "last_message": None,

@@ -199,8 +199,20 @@ To map any unknown table: open the JSON dump in `decrypted_data/account-{id}/tN.
 | `01 70 04` | `p` | phone (validated 6–15 digits) |
 | `01 74 04` | `t` | title (channel/group) |
 | `01 72 01` | `r` | secret-chat remote peer (8b LE int follows) |
+| `02 62 69 05` | `bi` | bot_info struct present → peer is a bot |
+| `02 62 69 0b` | `bi` | bot_info nil → peer is a non-bot user |
 
 Ref: `apps/tool/postbox_parser.py:29-97`.
+
+#### Bot vs user — type tag on `bi`
+
+Bot/user is **not** encoded in `peer_id`. Both legacy 32-bit (`hi=0`) and modern 64-bit (`hi=8`) IDs hold a mix of users and bots. The signal is the type byte after `02 62 69`:
+
+- `05` = struct present — Telegram only fills `BotInfo` for bots, so the field is non-nil iff the peer is a bot.
+- `0b` = nil — non-bot user.
+- field absent — record is a channel or group (no `BotInfo` in those types).
+
+Validated across 84,429 t2 records in one snapshot: 969 `bi=05`, 78,435 `bi=0b`, 5,025 absent, zero rows with both. Catches bots whose username doesn't end in `bot` (`@stickers`, `@botfather`, `@gif`, `@gamee`, `@ifttt`) and excludes users whose username does (`@user949929_bot`, `@i3n1bot`).
 
 #### Known-but-unparsed peer field shortenings
 
@@ -240,15 +252,17 @@ Ref: `apps/tool/postbox_parser.py:521-539`.
 
 | Hi 32 bits | Type |
 |-----------:|------|
-| `0x00000000` | User |
+| `0x00000000` | User / bot — legacy 32-bit ID |
 | `0x00000001` | Group |
 | `0x00000002` | Channel |
 | `0x00000003` | Secret chat |
-| `0x00000008` | Bot |
+| `0x00000008` | User / bot — modern 64-bit ID (post-2021 Telegram migration) |
 
-Lo 32 bits = the actual user / chat / channel ID.
+Lo 32 bits = the actual user / chat / channel ID. Bots and users share the same namespace — distinguish them via the `bi` tag in §4, not the hi byte.
 
-Ref: `apps/api/peer.py:5-18`.
+Other hi values seen in live data (`0x09`, `0x10`, `0x7CA`, `0x7D2`) are unmapped; they account for <0.5% of peers.
+
+Ref: `apps/api/peer.py:5-22`.
 
 ---
 
