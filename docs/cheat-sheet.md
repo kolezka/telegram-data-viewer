@@ -120,7 +120,59 @@ No PBKDF2 — raw key mode. Refs: `apps/tool/tg_appstore_decrypt.py:137-140`, `a
 
 Ref: `apps/tool/postbox_parser.py:1-15`.
 
-A live Postbox DB contains additional `t*` tables (`t1`, `t5`, `t8`, `t9`, …) that this toolkit doesn't parse yet — `tg_appstore_decrypt.py` enumerates them via `sqlite_master` for inspection (`apps/tool/tg_appstore_decrypt.py:236-254`) but only `t2` and `t7` are decoded end-to-end. To map a new one, dump its schema with `PRAGMA table_info('tN')` and hex-dump a few values.
+A live Postbox DB contains many additional `t*` tables (`t0`, `t1`, `t3`, …, `t80` and beyond) that this toolkit doesn't decode yet — `tg_appstore_decrypt.py` enumerates them via `sqlite_master` and dumps each as `tN.json` (`apps/tool/tg_appstore_decrypt.py:236-254`), but only `t2`, `t7`, and `ft41_content` are decoded end-to-end.
+
+**Schema is sparse:** the table set varies per account. A heavily-used account in the sample backup carries 53 `t*` tables; a less-used one only 41. Tables only materialise when their feature is touched — absence of `tN` for one account does not mean it's deprecated.
+
+### Live-DB inventory (sample: 1 account, ~750 messages, ~1600 peers)
+
+Row-count and shape observations from `tg_2026-04-27_02-27-12/.../account-<redacted-account-id>/`. **Purpose** marked *(parsed)* is what this toolkit decodes; everything else is inferred from key shape, value size, and Postbox conventions — unverified.
+
+| Table | Rows | Key | Value | Likely purpose |
+|-------|-----:|-----|-------|----------------|
+| `t0` | 5 | int | 4 B | DB schema/version markers |
+| `t1` | 8 | string `primes:...` | 138 B | MTProto DH primes cache (secret-chat handshake) |
+| `t2` | 1 631 | int64 user_id | tagged binary | **Peers (parsed)** |
+| `t3` | 231 | int | 12 B | Peer presence / last-seen status |
+| `t4` | 748 | 16 B | 5 B | Message metadata index (mirrors t7 row count) |
+| `t6` | 1 266 | 12 B | 21 B | Media reference index |
+| `t7` | 748 | 20 B (peer+ts+ns) | tagged binary | **Messages (parsed)** |
+| `t8` | 60 | int64 user_id | 21 B | Per-peer notification settings |
+| `t9` | 24 | 24 B | 12 B | Per-thread / topic state |
+| `t10` | 766 | 1 B | NULL | Bitset / feature-flag set |
+| `t12` | 438 | 24 B | NULL | Message tag/label set (key-only) |
+| `t13` | 13 | int64 | 40 B | Cached chat-list summary entries |
+| `t14` | 36 | int64 | 29 B | Per-peer secondary state |
+| `t15` | 1 | int | 2 B | Singleton (sync cursor?) |
+| `t16` | 78 | 8 B | NULL | int64 set (read msg ids?) |
+| `t18` | 75 | int64 user_id | ~1.4 KB | Large per-peer state blob (chat list pin?) |
+| `t19` | 45 | int64 | 95 B | Per-peer config |
+| `t20` | 1 570 | int64 user_id | 30 B | Small per-peer record |
+| `t21` | 9 | 16 B | 197 B | Folder / filter definitions |
+| `t22` | **8 224** | 24 B | ~1 KB | **Largest table** — likely cloud message timeline / sparse history index |
+| `t25`–`t29` | 2–239 | mixed | small | Tag indices / per-peer feeds |
+| `t31`, `t32` | 1–2 | — | — | Singleton config |
+| `t35`–`t38` | 49–6 182 | mixed | mixed | t36 (6 182 rows, 24 B values) likely reactions or read-state index per message |
+| `t40` | 6 | int64 user_id | 8 B | Mapping (peer → counter) |
+| `t44`, `t45`, `t47` | 8–238 | mixed | 4–12 B | Index/counter tables |
+| `t56` | 155 | 20 B (t7-shaped) | 4 B | Per-message read marker |
+| `t58`, `t59` | 1 | — | — | Singleton config |
+| `t62` | 516 | 28 B | NULL | Message global index (key-only set) |
+| `t63` | 30 | 28 B | 4 B | Index sibling of t62 |
+| `t65` | 2 | 5 B | 90 B | Sticker-set / config |
+| `t67` | 33 | int64 user_id | 239 B | Per-peer detailed settings (themes?) |
+| `t68` | 7 | 16 B | 157 B | Persistent payload |
+| `t70` | 13 | 12 B | ~1.7 KB | Large per-row blobs (call history?) |
+| `t71` | 427 | 32 B | NULL | Set (hashes?) |
+| `t72`, `t73` | 7 | mixed | up to 503 B | Peer/message structures |
+| `t75`–`t80` | 1–45 | mixed | small | Index / counter tables |
+| `ft41` | — | FTS5 virtual | — | Message search front-end |
+| `ft41_content` | varies | rowid | c0..c3 | **FTS rows (parsed)** — also surfaces deleted message text |
+| `ft41_config`, `ft41_data`, `ft41_docsize`, `ft41_idx` | — | — | — | Standard FTS5 shadow tables (don't query directly) |
+
+`__meta_fulltext_tables.json` lists which `ftN` virtual tables exist (only `ft41` in current builds).
+
+To map any unknown table: open the JSON dump in `decrypted_data/account-{id}/tN.json`, look at key/value sizes for hints (8 B = int64 ID, 20 B = t7-shaped key, NULL value = set semantics), then sample-decode a few values with `python -c "print(bytes.fromhex('...'))"`.
 
 ---
 
